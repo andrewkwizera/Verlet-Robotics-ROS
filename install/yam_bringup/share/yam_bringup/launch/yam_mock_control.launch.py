@@ -1,0 +1,1 @@
+/home/verlet/yam_ros2_ws/src/yam_bringup/launch/yam_mock_control.launch.py

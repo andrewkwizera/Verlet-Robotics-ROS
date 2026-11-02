@@ -1,0 +1,17 @@
+/home/verlet/yam_ros2_ws/install/yam_teleop_cpp/lib/yam_teleop_cpp/yam_leader
+/home/verlet/yam_ros2_ws/install/yam_teleop_cpp/lib/yam_teleop_cpp/yam_follower
+/home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/ament_index/resource_index/package_run_dependencies/yam_teleop_cpp
+/home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/ament_index/resource_index/parent_prefix_path/yam_teleop_cpp
+/home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/environment/ament_prefix_path.sh
+/home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/environment/ament_prefix_path.dsv
+/home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/environment/path.sh
+/home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/environment/path.dsv
+/home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/local_setup.bash
+/home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/local_setup.sh
+/home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/local_setup.zsh
+/home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/local_setup.dsv
+/home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/package.dsv
+/home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/ament_index/resource_index/packages/yam_teleop_cpp
+/home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/cmake/yam_teleop_cppConfig.cmake
+/home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/cmake/yam_teleop_cppConfig-version.cmake
+/home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/package.xml

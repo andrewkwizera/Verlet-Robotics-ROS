@@ -1,0 +1,1 @@
+/home/verlet/yam_ros2_ws/build/yam_teleop_cpp/ament_cmake_core/yam_teleop_cppConfig-version.cmake

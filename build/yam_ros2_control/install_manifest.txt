@@ -1,0 +1,3 @@
+/home/verlet/yam_ros2_ws/install/yam_ros2_control/lib/libyam_hardware_interface.so
+/home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/cmake/export_yam_hardware_interfaceExport.cmake
+/home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/cmake/export_yam_hardware_interfaceExport-noconfig.cmake

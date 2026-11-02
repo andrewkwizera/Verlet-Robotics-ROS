@@ -1,0 +1,65 @@
+[0.007s] Invoking command in '/home/verlet/yam_ros2_ws/build/yam_ros2_control': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake /home/verlet/yam_ros2_ws/src/yam_ros2_control -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/verlet/yam_ros2_ws/install/yam_ros2_control
+[0.062s] -- The C compiler identification is GNU 13.3.0
+[0.095s] -- The CXX compiler identification is GNU 13.3.0
+[0.104s] -- Detecting C compiler ABI info
+[0.159s] -- Detecting C compiler ABI info - done
+[0.165s] -- Check for working C compiler: /usr/bin/cc - skipped
+[0.165s] -- Detecting C compile features
+[0.166s] -- Detecting C compile features - done
+[0.171s] -- Detecting CXX compiler ABI info
+[0.233s] -- Detecting CXX compiler ABI info - done
+[0.239s] -- Check for working CXX compiler: /usr/bin/c++ - skipped
+[0.239s] -- Detecting CXX compile features
+[0.239s] -- Detecting CXX compile features - done
+[0.241s] -- Found ament_cmake: 2.5.6 (/opt/ros/jazzy/share/ament_cmake/cmake)
+[0.313s] -- Found Python3: /usr/bin/python3 (found version "3.12.3") found components: Interpreter 
+[0.358s] -- Override CMake install command with custom implementation using symlinks instead of copying resources
+[0.374s] -- Found hardware_interface: 4.48.1 (/opt/ros/jazzy/share/hardware_interface/cmake)
+[0.434s] -- Found rosidl_generator_c: 4.6.9 (/opt/ros/jazzy/share/rosidl_generator_c/cmake)
+[0.441s] -- Found rosidl_generator_cpp: 4.6.9 (/opt/ros/jazzy/share/rosidl_generator_cpp/cmake)
+[0.450s] -- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+[0.460s] -- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+[0.616s] -- Found TinyXML2 via Config file: /usr/lib/x86_64-linux-gnu/cmake/tinyxml2
+[0.641s] -- Found rmw_implementation_cmake: 7.3.4 (/opt/ros/jazzy/share/rmw_implementation_cmake/cmake)
+[0.642s] -- Found rmw_fastrtps_cpp: 8.4.4 (/opt/ros/jazzy/share/rmw_fastrtps_cpp/cmake)
+[0.653s] -- Found TinyXML2 via Config file: /usr/lib/x86_64-linux-gnu/cmake/tinyxml2
+[0.694s] -- Found OpenSSL: /usr/lib/x86_64-linux-gnu/libcrypto.so (found version "3.0.13")  
+[0.696s] -- Found TinyXML2 via Config file: /usr/lib/x86_64-linux-gnu/cmake/tinyxml2
+[0.707s] -- Found FastRTPS: /opt/ros/jazzy/include (Required is at least version "2.13") 
+[0.709s] -- Found TinyXML2 via Config file: /usr/lib/x86_64-linux-gnu/cmake/tinyxml2
+[0.715s] -- Found TinyXML2 via Config file: /usr/lib/x86_64-linux-gnu/cmake/tinyxml2
+[0.724s] -- Using RMW implementation 'rmw_fastrtps_cpp' as default
+[0.842s] -- Found Boost: /usr/lib/x86_64-linux-gnu/cmake/Boost-1.83.0/BoostConfig.cmake (found version "1.83.0")  
+[0.963s] -- Found ament_lint_auto: 0.17.5 (/opt/ros/jazzy/share/ament_lint_auto/cmake)
+[1.042s] -- Added test 'cppcheck' to perform static code analysis on C / C++ code
+[1.043s] -- Configured cppcheck include dirs: 
+[1.043s] -- Configured cppcheck exclude dirs and/or files: 
+[1.043s] -- Added test 'lint_cmake' to check CMake code style
+[1.043s] -- Added test 'uncrustify' to check C / C++ code style
+[1.043s] -- Configured uncrustify additional arguments: 
+[1.044s] -- Added test 'xmllint' to check XML markup files
+[1.044s] -- Configuring done (1.0s)
+[1.049s] -- Generating done (0.0s)
+[1.050s] -- Build files have been written to: /home/verlet/yam_ros2_ws/build/yam_ros2_control
+[1.059s] Invoked command in '/home/verlet/yam_ros2_ws/build/yam_ros2_control' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake /home/verlet/yam_ros2_ws/src/yam_ros2_control -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/verlet/yam_ros2_ws/install/yam_ros2_control
+[1.061s] Invoking command in '/home/verlet/yam_ros2_ws/build/yam_ros2_control': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/verlet/yam_ros2_ws/build/yam_ros2_control -- -j16 -l16
+[1.091s] Invoked command in '/home/verlet/yam_ros2_ws/build/yam_ros2_control' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/verlet/yam_ros2_ws/build/yam_ros2_control -- -j16 -l16
+[1.097s] Invoking command in '/home/verlet/yam_ros2_ws/build/yam_ros2_control': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/verlet/yam_ros2_ws/build/yam_ros2_control
+[1.102s] -- Install configuration: ""
+[1.102s] -- Execute custom install script
+[1.102s] -- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/ament_index/resource_index/package_run_dependencies/yam_ros2_control
+[1.108s] -- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/ament_index/resource_index/parent_prefix_path/yam_ros2_control
+[1.113s] -- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/environment/ament_prefix_path.sh
+[1.118s] -- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/environment/ament_prefix_path.dsv
+[1.123s] -- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/environment/path.sh
+[1.128s] -- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/environment/path.dsv
+[1.134s] -- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/local_setup.bash
+[1.139s] -- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/local_setup.sh
+[1.144s] -- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/local_setup.zsh
+[1.149s] -- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/local_setup.dsv
+[1.154s] -- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/package.dsv
+[1.160s] -- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/ament_index/resource_index/packages/yam_ros2_control
+[1.167s] -- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/cmake/yam_ros2_controlConfig.cmake
+[1.173s] -- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/cmake/yam_ros2_controlConfig-version.cmake
+[1.180s] -- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/package.xml
+[1.191s] Invoked command in '/home/verlet/yam_ros2_ws/build/yam_ros2_control' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/verlet/yam_ros2_ws/build/yam_ros2_control

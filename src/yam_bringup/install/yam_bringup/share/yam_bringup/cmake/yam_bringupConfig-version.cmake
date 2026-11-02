@@ -1,0 +1,1 @@
+/home/verlet/yam_ros2_ws/src/yam_bringup/build/yam_bringup/ament_cmake_core/yam_bringupConfig-version.cmake

@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<library path="yam_hardware_interface">
+  <class
+    name="yam_ros2_control/YAMHardwareInterface"
+    type="yam_ros2_control::YAMHardwareInterface"
+    base_class_type="hardware_interface::SystemInterface">
+    <description>
+      Mock six-joint YAM hardware interface for ROS 2 control.
+      No physical CAN commands are sent.
+    </description>
+  </class>
+</library>

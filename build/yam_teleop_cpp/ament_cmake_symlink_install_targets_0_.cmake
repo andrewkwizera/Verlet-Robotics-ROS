@@ -1,0 +1,1 @@
+ament_cmake_symlink_install_targets("TARGET_FILES" "/home/verlet/yam_ros2_ws/build/yam_teleop_cpp/yam_leader" "/home/verlet/yam_ros2_ws/build/yam_teleop_cpp/yam_follower" "TARGETS" "yam_leader" "yam_follower" "DESTINATION" "lib/yam_teleop_cpp")

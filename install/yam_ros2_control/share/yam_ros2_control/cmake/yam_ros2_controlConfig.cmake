@@ -1,0 +1,1 @@
+/home/verlet/yam_ros2_ws/build/yam_ros2_control/ament_cmake_core/yam_ros2_controlConfig.cmake

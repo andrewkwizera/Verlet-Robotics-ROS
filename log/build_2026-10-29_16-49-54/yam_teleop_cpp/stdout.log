@@ -1,0 +1,58 @@
+-- The C compiler identification is GNU 13.3.0
+-- The CXX compiler identification is GNU 13.3.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Found ament_cmake: 2.5.6 (/opt/ros/jazzy/share/ament_cmake/cmake)
+-- Found Python3: /usr/bin/python3 (found version "3.12.3") found components: Interpreter 
+-- Override CMake install command with custom implementation using symlinks instead of copying resources
+-- Found rclcpp: 28.1.22 (/opt/ros/jazzy/share/rclcpp/cmake)
+-- Found rosidl_generator_c: 4.6.9 (/opt/ros/jazzy/share/rosidl_generator_c/cmake)
+-- Found rosidl_generator_cpp: 4.6.9 (/opt/ros/jazzy/share/rosidl_generator_cpp/cmake)
+-- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+-- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+-- Found rmw_implementation_cmake: 7.3.4 (/opt/ros/jazzy/share/rmw_implementation_cmake/cmake)
+-- Found rmw_fastrtps_cpp: 8.4.4 (/opt/ros/jazzy/share/rmw_fastrtps_cpp/cmake)
+-- Found OpenSSL: /usr/lib/x86_64-linux-gnu/libcrypto.so (found version "3.0.13")  
+-- Found FastRTPS: /opt/ros/jazzy/include (Required is at least version "2.13") 
+-- Using RMW implementation 'rmw_fastrtps_cpp' as default
+-- Found sensor_msgs: 5.3.8 (/opt/ros/jazzy/share/sensor_msgs/cmake)
+-- Found ament_lint_auto: 0.17.5 (/opt/ros/jazzy/share/ament_lint_auto/cmake)
+-- Added test 'cppcheck' to perform static code analysis on C / C++ code
+-- Configured cppcheck include dirs: 
+-- Configured cppcheck exclude dirs and/or files: 
+-- Added test 'lint_cmake' to check CMake code style
+-- Added test 'uncrustify' to check C / C++ code style
+-- Configured uncrustify additional arguments: 
+-- Added test 'xmllint' to check XML markup files
+-- Configuring done (0.7s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/verlet/yam_ros2_ws/build/yam_teleop_cpp
+[ 50%] [32mBuilding CXX object CMakeFiles/yam_leader.dir/src/leader_node.cpp.o[0m
+[100%] [32m[1mLinking CXX executable yam_leader[0m
+[100%] Built target yam_leader
+-- Install configuration: ""
+-- Execute custom install script
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_teleop_cpp/lib/yam_teleop_cpp/yam_leader
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/ament_index/resource_index/package_run_dependencies/yam_teleop_cpp
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/ament_index/resource_index/parent_prefix_path/yam_teleop_cpp
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/environment/ament_prefix_path.sh
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/environment/ament_prefix_path.dsv
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/environment/path.sh
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/environment/path.dsv
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/local_setup.bash
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/local_setup.sh
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/local_setup.zsh
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/local_setup.dsv
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/package.dsv
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/ament_index/resource_index/packages/yam_teleop_cpp
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/cmake/yam_teleop_cppConfig.cmake
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/cmake/yam_teleop_cppConfig-version.cmake
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_teleop_cpp/share/yam_teleop_cpp/package.xml

@@ -1,0 +1,60 @@
+-- Found ament_cmake: 2.5.6 (/opt/ros/jazzy/share/ament_cmake/cmake)
+-- Override CMake install command with custom implementation using symlinks instead of copying resources
+-- Found hardware_interface: 4.48.1 (/opt/ros/jazzy/share/hardware_interface/cmake)
+-- Found rosidl_generator_c: 4.6.9 (/opt/ros/jazzy/share/rosidl_generator_c/cmake)
+-- Found rosidl_generator_cpp: 4.6.9 (/opt/ros/jazzy/share/rosidl_generator_cpp/cmake)
+-- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+-- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+-- Found TinyXML2 via Config file: /usr/lib/x86_64-linux-gnu/cmake/tinyxml2
+-- Found rmw_implementation_cmake: 7.3.4 (/opt/ros/jazzy/share/rmw_implementation_cmake/cmake)
+-- Found rmw_fastrtps_cpp: 8.4.4 (/opt/ros/jazzy/share/rmw_fastrtps_cpp/cmake)
+-- Found TinyXML2 via Config file: /usr/lib/x86_64-linux-gnu/cmake/tinyxml2
+-- Found TinyXML2 via Config file: /usr/lib/x86_64-linux-gnu/cmake/tinyxml2
+-- Found TinyXML2 via Config file: /usr/lib/x86_64-linux-gnu/cmake/tinyxml2
+-- Found TinyXML2 via Config file: /usr/lib/x86_64-linux-gnu/cmake/tinyxml2
+-- Using RMW implementation 'rmw_fastrtps_cpp' as default
+-- Configuring done (0.6s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/verlet/yam_ros2_ws/build/yam_ros2_control
+[ 50%] [32mBuilding CXX object CMakeFiles/yam_hardware_interface.dir/src/yam_hardware_interface.cpp.o[0m
+[01m[K/home/verlet/yam_ros2_ws/src/yam_ros2_control/src/yam_hardware_interface.cpp:[m[K In member function ‘[01m[Kvirtual hardware_interface::CallbackReturn yam_ros2_control::YAMHardwareInterface::[01;32m[Kon_init[m[K(const hardware_interface::HardwareInfo&)[m[K’:
+[01m[K/home/verlet/yam_ros2_ws/src/yam_ros2_control/src/yam_hardware_interface.cpp:17:51:[m[K [01;35m[Kwarning: [m[K‘[01m[Kvirtual rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn hardware_interface::HardwareComponentInterface::[01;32m[Kon_init[m[K(const hardware_interface::HardwareInfo&)[m[K’ is deprecated: Use on_init(const HardwareComponentInterfaceParams & params) instead. [[01;35m[K]8;;https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html#index-Wdeprecated-declarations-Wdeprecated-declarations]8;;[m[K]
+   17 | [01;35m[K_interface::SystemInterface::on_init(info)[m[K !=
+      | [01;35m[K~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~[m[K
+
+In file included from [01m[K/opt/ros/jazzy/include/hardware_interface/hardware_interface/system_interface.hpp:18[m[K,
+                 from [01m[K/home/verlet/yam_ros2_ws/src/yam_ros2_control/include/yam_ros2_control/yam_hardware_interface.hpp:6[m[K,
+                 from [01m[K/home/verlet/yam_ros2_ws/src/yam_ros2_control/src/yam_hardware_interface.cpp:1[m[K:
+[01m[K/opt/ros/jazzy/include/hardware_interface/hardware_interface/hardware_component_interface.hpp:140:26:[m[K [01;36m[Knote: [m[Kdeclared here
+  140 |   virtual CallbackReturn [01;36m[Kon_init[m[K(const HardwareInfo & hardware_info);
+      |                          [01;36m[K^~~~~~~[m[K
+[100%] [32m[1mLinking CXX shared library libyam_hardware_interface.so[0m
+[100%] Built target yam_hardware_interface
+-- Install configuration: ""
+-- Execute custom install script
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control//yam_ros2_control.xml
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/include/yam_ros2_control/yam_hardware_interface.hpp
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/environment/library_path.sh
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/environment/library_path.dsv
+-- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/ament_index/resource_index/package_run_dependencies/yam_ros2_control
+-- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/ament_index/resource_index/parent_prefix_path/yam_ros2_control
+-- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/environment/ament_prefix_path.sh
+-- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/environment/ament_prefix_path.dsv
+-- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/environment/path.sh
+-- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/environment/path.dsv
+-- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/local_setup.bash
+-- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/local_setup.sh
+-- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/local_setup.zsh
+-- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/local_setup.dsv
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/package.dsv
+-- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/ament_index/resource_index/packages/yam_ros2_control
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/ament_index/resource_index/hardware_interface__pluginlib__plugin/yam_ros2_control
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/cmake/ament_cmake_export_targets-extras.cmake
+-- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/cmake/ament_cmake_export_dependencies-extras.cmake
+-- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/cmake/yam_ros2_controlConfig.cmake
+-- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/cmake/yam_ros2_controlConfig-version.cmake
+-- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/package.xml
+-- Installing: /home/verlet/yam_ros2_ws/install/yam_ros2_control/lib/libyam_hardware_interface.so
+-- Set non-toolchain portion of runtime path of "/home/verlet/yam_ros2_ws/install/yam_ros2_control/lib/libyam_hardware_interface.so" to ""
+-- Installing: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/cmake/export_yam_hardware_interfaceExport.cmake
+-- Installing: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/cmake/export_yam_hardware_interfaceExport-noconfig.cmake

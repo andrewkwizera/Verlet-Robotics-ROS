@@ -1,0 +1,88 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-.-90b1d84f9769e72e6184.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.15"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3
+					]
+				}
+			],
+			"name" : "",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "yam_ros2_control",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "uninstall::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-uninstall-50b07355281479f28dc3.json",
+					"name" : "uninstall",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "yam_can_driver::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-yam_can_driver-0750957fbad9d7ef4d6f.json",
+					"name" : "yam_can_driver",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "yam_hardware_interface::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-yam_hardware_interface-8ced72dfbeff35d0f4b9.json",
+					"name" : "yam_hardware_interface",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "yam_ros2_control_uninstall::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-yam_ros2_control_uninstall-606b98b0268fc5be78d9.json",
+					"name" : "yam_ros2_control_uninstall",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/home/verlet/yam_ros2_ws/build/yam_ros2_control",
+		"source" : "/home/verlet/yam_ros2_ws/src/yam_ros2_control"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 6
+	}
+}

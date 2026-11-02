@@ -1,0 +1,88 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-.-12c6f02ab2483d6449c4.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.15"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3
+					]
+				}
+			],
+			"name" : "",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "yam_teleop_cpp",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "uninstall::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-uninstall-365d4ecf27e78556636f.json",
+					"name" : "uninstall",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "yam_follower::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-yam_follower-11bb1064e56bc80ff68c.json",
+					"name" : "yam_follower",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "yam_leader::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-yam_leader-86bedabee3bf7672c96e.json",
+					"name" : "yam_leader",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "yam_teleop_cpp_uninstall::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-yam_teleop_cpp_uninstall-cd534498125e21d8245f.json",
+					"name" : "yam_teleop_cpp_uninstall",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/home/verlet/yam_ros2_ws/build/yam_teleop_cpp",
+		"source" : "/home/verlet/yam_ros2_ws/src/yam_teleop_cpp"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 6
+	}
+}

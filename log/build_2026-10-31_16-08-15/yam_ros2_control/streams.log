@@ -1,0 +1,55 @@
+[0.041s] Invoking command in '/home/verlet/yam_ros2_ws/build/yam_ros2_control': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/verlet/yam_ros2_ws/build/yam_ros2_control -- -j16 -l16
+[0.065s] -- Found ament_cmake: 2.5.6 (/opt/ros/jazzy/share/ament_cmake/cmake)
+[0.195s] -- Override CMake install command with custom implementation using symlinks instead of copying resources
+[0.200s] -- Found hardware_interface: 4.48.1 (/opt/ros/jazzy/share/hardware_interface/cmake)
+[0.220s] -- Found rosidl_generator_c: 4.6.9 (/opt/ros/jazzy/share/rosidl_generator_c/cmake)
+[0.225s] -- Found rosidl_generator_cpp: 4.6.9 (/opt/ros/jazzy/share/rosidl_generator_cpp/cmake)
+[0.232s] -- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+[0.240s] -- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+[0.386s] -- Found TinyXML2 via Config file: /usr/lib/x86_64-linux-gnu/cmake/tinyxml2
+[0.405s] -- Found rmw_implementation_cmake: 7.3.4 (/opt/ros/jazzy/share/rmw_implementation_cmake/cmake)
+[0.406s] -- Found rmw_fastrtps_cpp: 8.4.4 (/opt/ros/jazzy/share/rmw_fastrtps_cpp/cmake)
+[0.415s] -- Found TinyXML2 via Config file: /usr/lib/x86_64-linux-gnu/cmake/tinyxml2
+[0.426s] -- Found TinyXML2 via Config file: /usr/lib/x86_64-linux-gnu/cmake/tinyxml2
+[0.442s] -- Found TinyXML2 via Config file: /usr/lib/x86_64-linux-gnu/cmake/tinyxml2
+[0.447s] -- Found TinyXML2 via Config file: /usr/lib/x86_64-linux-gnu/cmake/tinyxml2
+[0.453s] -- Using RMW implementation 'rmw_fastrtps_cpp' as default
+[0.663s] -- Configuring done (0.6s)
+[0.688s] -- Generating done (0.0s)
+[0.691s] -- Build files have been written to: /home/verlet/yam_ros2_ws/build/yam_ros2_control
+[0.717s] [ 25%] [32mBuilding CXX object CMakeFiles/yam_can_driver.dir/src/yam_can_driver.cpp.o[0m
+[0.723s] [ 75%] Built target yam_hardware_interface
+[0.930s] [100%] [32m[1mLinking CXX shared library libyam_can_driver.so[0m
+[0.974s] [100%] Built target yam_can_driver
+[0.982s] Invoked command in '/home/verlet/yam_ros2_ws/build/yam_ros2_control' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --build /home/verlet/yam_ros2_ws/build/yam_ros2_control -- -j16 -l16
+[0.990s] Invoking command in '/home/verlet/yam_ros2_ws/build/yam_ros2_control': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/verlet/yam_ros2_ws/build/yam_ros2_control
+[0.994s] -- Install configuration: ""
+[0.994s] -- Execute custom install script
+[0.994s] -- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control//yam_ros2_control.xml
+[0.995s] -- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/include/yam_ros2_control/yam_can_driver.hpp
+[1.000s] -- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/include/yam_ros2_control/yam_hardware_interface.hpp
+[1.000s] -- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/environment/library_path.sh
+[1.000s] -- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/environment/library_path.dsv
+[1.000s] -- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/lib/libyam_can_driver.so
+[1.005s] -- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/ament_index/resource_index/package_run_dependencies/yam_ros2_control
+[1.005s] -- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/ament_index/resource_index/parent_prefix_path/yam_ros2_control
+[1.006s] -- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/environment/ament_prefix_path.sh
+[1.006s] -- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/environment/ament_prefix_path.dsv
+[1.006s] -- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/environment/path.sh
+[1.006s] -- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/environment/path.dsv
+[1.006s] -- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/local_setup.bash
+[1.006s] -- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/local_setup.sh
+[1.006s] -- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/local_setup.zsh
+[1.006s] -- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/local_setup.dsv
+[1.006s] -- Symlinking: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/package.dsv
+[1.011s] -- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/ament_index/resource_index/packages/yam_ros2_control
+[1.011s] -- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/ament_index/resource_index/hardware_interface__pluginlib__plugin/yam_ros2_control
+[1.011s] -- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/cmake/ament_cmake_export_targets-extras.cmake
+[1.011s] -- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/cmake/ament_cmake_export_dependencies-extras.cmake
+[1.011s] -- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/cmake/yam_ros2_controlConfig.cmake
+[1.011s] -- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/cmake/yam_ros2_controlConfig-version.cmake
+[1.011s] -- Up-to-date symlink: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/package.xml
+[1.012s] -- Up-to-date: /home/verlet/yam_ros2_ws/install/yam_ros2_control/lib/libyam_hardware_interface.so
+[1.012s] -- Up-to-date: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/cmake/export_yam_hardware_interfaceExport.cmake
+[1.012s] -- Up-to-date: /home/verlet/yam_ros2_ws/install/yam_ros2_control/share/yam_ros2_control/cmake/export_yam_hardware_interfaceExport-noconfig.cmake
+[1.015s] Invoked command in '/home/verlet/yam_ros2_ws/build/yam_ros2_control' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy DEBUGINFOD_URLS=https://debuginfod.ubuntu.com /usr/bin/cmake --install /home/verlet/yam_ros2_ws/build/yam_ros2_control
