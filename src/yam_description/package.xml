@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>yam_description</name>
+  <version>0.0.1</version>
+  <description>
+    Robot description and Xacro configurations
+    for the Verlet Robotics YAM leader-follower system.
+  </description>
+
+  <maintainer email="mmatheri@andrew.cmu.edu">Verlet Robotics</maintainer>
+
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
