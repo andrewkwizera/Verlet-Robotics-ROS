@@ -1,0 +1,42 @@
+<?xml version="1.0"?>
+<robot
+  xmlns:xacro="http://www.ros.org/wiki/xacro"
+  name="yam">
+
+  <!-- Physical robot configuration -->
+  <xacro:arg name="role" default="follower"/>
+  <xacro:arg name="can_interface" default="can1"/>
+
+  <!-- Provisional software offsets.
+       These are NOT validated calibration values. -->
+  <xacro:arg name="offset_1" default="0.0"/>
+  <xacro:arg name="offset_2" default="0.0"/>
+  <xacro:arg name="offset_3" default="0.0"/>
+  <xacro:arg name="offset_4" default="0.0"/>
+  <xacro:arg name="offset_5" default="0.0"/>
+  <xacro:arg name="offset_6" default="0.0"/>
+
+  <!-- Original YAM V1 robot model -->
+  <xacro:include
+    filename="$(find yam_description)/urdf/yam_joints.xacro"/>
+
+  <!-- Physical ros2_control hardware interfaces -->
+  <xacro:include
+    filename="$(find yam_description)/urdf/yam_ros2_control.xacro"/>
+
+  <!-- Generate the real robot geometry -->
+  <xacro:yam_links_and_joints/>
+
+  <!-- Connect robot joints to the hardware interface -->
+  <xacro:yam_ros2_control
+    name="YAMPhysicalHardware"
+    role="$(arg role)"
+    can_interface="$(arg can_interface)"
+    offset_1="$(arg offset_1)"
+    offset_2="$(arg offset_2)"
+    offset_3="$(arg offset_3)"
+    offset_4="$(arg offset_4)"
+    offset_5="$(arg offset_5)"
+    offset_6="$(arg offset_6)"/>
+
+</robot>

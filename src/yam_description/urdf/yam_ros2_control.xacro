@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro
+    name="yam_ros2_control"
+    params="name can_interface role
+            offset_1 offset_2 offset_3
+            offset_4 offset_5 offset_6">
+
+    <ros2_control name="${name}" type="system">
+
+      <hardware>
+        <plugin>yam_ros2_control/YAMPhysicalHardware</plugin>
+
+        <param name="can_interface">${can_interface}</param>
+        <param name="role">${role}</param>
+
+        <param name="offset_1">${offset_1}</param>
+        <param name="offset_2">${offset_2}</param>
+        <param name="offset_3">${offset_3}</param>
+        <param name="offset_4">${offset_4}</param>
+        <param name="offset_5">${offset_5}</param>
+        <param name="offset_6">${offset_6}</param>
+      </hardware>
+
+      <xacro:macro name="yam_joint_control" params="joint_name">
+        <joint name="${joint_name}">
+          <command_interface name="position"/>
+          <state_interface name="position"/>
+          <state_interface name="velocity"/>
+        </joint>
+      </xacro:macro>
+
+      <xacro:yam_joint_control joint_name="joint_1"/>
+      <xacro:yam_joint_control joint_name="joint_2"/>
+      <xacro:yam_joint_control joint_name="joint_3"/>
+      <xacro:yam_joint_control joint_name="joint_4"/>
+      <xacro:yam_joint_control joint_name="joint_5"/>
+      <xacro:yam_joint_control joint_name="joint_6"/>
+
+    </ros2_control>
+
+  </xacro:macro>
+
+</robot>
