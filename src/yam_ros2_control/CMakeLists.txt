@@ -90,4 +90,40 @@ install(
   LIBRARY DESTINATION lib
 )
 
+add_library(
+  yam_physical_hardware
+  SHARED
+  src/yam_physical_hardware.cpp
+)
+
+target_compile_features(
+  yam_physical_hardware
+  PUBLIC cxx_std_17
+)
+
+target_include_directories(
+  yam_physical_hardware
+  PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+ament_target_dependencies(
+  yam_physical_hardware
+  hardware_interface
+  pluginlib
+  rclcpp
+  rclcpp_lifecycle
+)
+
+target_link_libraries(
+  yam_physical_hardware
+  yam_can_driver
+)
+
+install(
+  TARGETS yam_physical_hardware
+  LIBRARY DESTINATION lib
+)
+
 ament_package()

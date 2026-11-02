@@ -1,4 +1,0 @@
-source;share/yam_teleop_cpp/local_setup.bash
-source;share/yam_teleop_cpp/local_setup.dsv
-source;share/yam_teleop_cpp/local_setup.sh
-source;share/yam_teleop_cpp/local_setup.zsh

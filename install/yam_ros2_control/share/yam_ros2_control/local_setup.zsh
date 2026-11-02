@@ -1,1 +1,0 @@
-/home/verlet/yam_ros2_ws/build/yam_ros2_control/ament_cmake_environment_hooks/local_setup.zsh
