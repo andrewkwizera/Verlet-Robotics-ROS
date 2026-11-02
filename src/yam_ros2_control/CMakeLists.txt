@@ -11,6 +11,26 @@ find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 
+# Physical YAM CAN communication library
+add_library(
+  yam_can_driver
+  SHARED
+  src/yam_can_driver.cpp
+)
+
+target_compile_features(
+  yam_can_driver
+  PUBLIC cxx_std_17
+)
+
+target_include_directories(
+  yam_can_driver
+  PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+# ros2_control hardware plugin (mock or real, chosen in the URDF)
 add_library(
   yam_hardware_interface
   SHARED
@@ -29,6 +49,12 @@ target_include_directories(
   $<INSTALL_INTERFACE:include>
 )
 
+# The plugin uses the CAN driver to talk to real motors.
+target_link_libraries(
+  yam_hardware_interface
+  yam_can_driver
+)
+
 ament_target_dependencies(
   yam_hardware_interface
   hardware_interface
@@ -43,7 +69,7 @@ pluginlib_export_plugin_description_file(
 )
 
 install(
-  TARGETS yam_hardware_interface
+  TARGETS yam_can_driver yam_hardware_interface
   EXPORT export_yam_hardware_interface
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
@@ -64,30 +90,6 @@ ament_export_dependencies(
   pluginlib
   rclcpp
   rclcpp_lifecycle
-)
-
-# Physical YAM CAN communication library
-add_library(
-  yam_can_driver
-  SHARED
-  src/yam_can_driver.cpp
-)
-
-target_compile_features(
-  yam_can_driver
-  PUBLIC cxx_std_17
-)
-
-target_include_directories(
-  yam_can_driver
-  PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
-
-install(
-  TARGETS yam_can_driver
-  LIBRARY DESTINATION lib
 )
 
 ament_package()
