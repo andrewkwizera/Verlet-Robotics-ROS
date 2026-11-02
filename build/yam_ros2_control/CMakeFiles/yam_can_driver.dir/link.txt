@@ -1,1 +1,0 @@
-/usr/bin/c++ -fPIC -shared -Wl,-soname,libyam_can_driver.so -o libyam_can_driver.so CMakeFiles/yam_can_driver.dir/src/yam_can_driver.cpp.o 

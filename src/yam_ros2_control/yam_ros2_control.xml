@@ -5,8 +5,9 @@
     type="yam_ros2_control::YAMHardwareInterface"
     base_class_type="hardware_interface::SystemInterface">
     <description>
-      Mock six-joint YAM hardware interface for ROS 2 control.
-      No physical CAN commands are sent.
+      Six-joint YAM hardware interface for ROS 2 control.
+      Runs as a mock by default. Set use_mock_hardware to
+      false in the URDF to drive real DM motors over CAN.
     </description>
   </class>
 </library>
