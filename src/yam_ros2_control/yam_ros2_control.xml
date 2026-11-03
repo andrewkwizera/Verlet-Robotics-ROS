@@ -1,21 +1,29 @@
 <?xml version="1.0"?>
-<library path="yam_hardware_interface">
-  <class
-    name="yam_ros2_control/YAMHardwareInterface"
-    type="yam_ros2_control::YAMHardwareInterface"
-    base_class_type="hardware_interface::SystemInterface">
-    <description>
-      Six-joint YAM hardware interface for ROS 2 control.
-      Runs as a mock by default. Set use_mock_hardware to
-      false in the URDF to drive real DM motors over CAN.
-    </description>
-  </class>
-  <class
-    name="yam_ros2_control/YAMPhysicalHardware"
-    type="yam_ros2_control::YAMPhysicalHardware"
-    base_class_type="hardware_interface::SystemInterface">
-    <description>
-      Physical YAM six-joint hardware interface using SocketCAN.
-    </description>
-  </class>
-</library>
+
+<class_libraries>
+
+  <!-- Mock YAM hardware -->
+  <library path="yam_hardware_interface">
+    <class
+      name="yam_ros2_control/YAMHardwareInterface"
+      type="yam_ros2_control::YAMHardwareInterface"
+      base_class_type="hardware_interface::SystemInterface">
+      <description>
+        Mock six-joint YAM hardware interface.
+      </description>
+    </class>
+  </library>
+
+  <!-- Physical YAM hardware -->
+  <library path="yam_physical_hardware">
+    <class
+      name="yam_ros2_control/YAMPhysicalHardware"
+      type="yam_ros2_control::YAMPhysicalHardware"
+      base_class_type="hardware_interface::SystemInterface">
+      <description>
+        Physical YAM hardware interface using SocketCAN.
+      </description>
+    </class>
+  </library>
+
+</class_libraries>

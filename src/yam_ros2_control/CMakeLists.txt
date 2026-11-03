@@ -93,11 +93,7 @@ ament_export_dependencies(
 )
 
 # Physical YAM CAN communication library
-add_library(
-  yam_can_driver
-  SHARED
-  src/yam_can_driver.cpp
-)
+
 
 target_compile_features(
   yam_can_driver

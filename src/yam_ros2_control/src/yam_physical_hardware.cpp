@@ -3,14 +3,29 @@
 
 #include <cmath>
 #include <exception>
+#include <limits>
 #include <stdexcept>
 #include <string>
-#include <vector>
+#include <utility>
 
 #include "pluginlib/class_list_macros.hpp"
 
 namespace yam_ros2_control
 {
+
+namespace
+{
+
+rclcpp::Logger logger()
+{
+    return rclcpp::get_logger("YAMPhysicalHardware");
+}
+
+} // namespace
+
+// ============================================================
+// INITIALIZATION
+// ============================================================
 
 hardware_interface::CallbackReturn
 YAMPhysicalHardware::on_init(
@@ -22,81 +37,28 @@ YAMPhysicalHardware::on_init(
         return hardware_interface::CallbackReturn::ERROR;
     }
 
-    if (info_.joints.size() != JOINT_COUNT)
-    {
-        RCLCPP_ERROR(
-            rclcpp::get_logger("YAMPhysicalHardware"),
-            "Expected exactly six YAM joints");
-
-        return hardware_interface::CallbackReturn::ERROR;
-    }
-
     try
     {
-        // Read CAN interface and robot role.
+        if (info_.joints.size() != JOINT_COUNT)
+        {
+            throw std::runtime_error(
+                "Expected six YAM arm joints");
+        }
+
         can_channel_ =
             info_.hardware_parameters.at("can_interface");
 
         role_ =
             info_.hardware_parameters.at("role");
 
-        if (role_ != "leader" && role_ != "follower")
+        // This integration stage is follower diagnostics only.
+        if (role_ != "follower" || can_channel_ != "can1")
         {
             throw std::runtime_error(
-                "Hardware role must be leader or follower");
+                "Read-only diagnostics support follower on can1 only");
         }
 
-        // Verify CAN interface matches the intended robot.
-        if (role_ == "leader" && can_channel_ != "can0")
-        {
-            throw std::runtime_error(
-                "Leader must use can0");
-        }
-
-        if (role_ == "follower" && can_channel_ != "can1")
-        {
-            throw std::runtime_error(
-                "Follower must use can1");
-        }
-
-        // YAM V1 motor directions, gains, and response IDs
-        // are defined in yam_physical_hardware.hpp.
-        //
-        // Only software offsets are loaded here.
-        // They must be established by calibration.
-
-        for (size_t i = 0; i < JOINT_COUNT; ++i)
-        {
-            offsets_[i] = std::stod(
-                info_.hardware_parameters.at(
-                    "offset_" + std::to_string(i + 1)));
-
-            if (!std::isfinite(offsets_[i]))
-            {
-                throw std::runtime_error(
-                    "Invalid motor offset for joint " +
-                    std::to_string(i + 1));
-            }
-
-            // Validate fixed YAM motor configuration.
-            if ((directions_[i] != 1.0 &&
-                 directions_[i] != -1.0) ||
-                !std::isfinite(kp_[i]) ||
-                !std::isfinite(kd_[i]) ||
-                kp_[i] < 0.0 ||
-                kp_[i] > 500.0 ||
-                kd_[i] < 0.0 ||
-                kd_[i] > 5.0 ||
-                response_ids_[i] > 0x7FF)
-            {
-                throw std::runtime_error(
-                    "Invalid YAM motor configuration for joint " +
-                    std::to_string(i + 1));
-            }
-        }
-
-        // Validate six ROS 2 joint interfaces.
-        for (size_t i = 0; i < JOINT_COUNT; ++i)
+        for (std::size_t i = 0; i < JOINT_COUNT; ++i)
         {
             const auto &joint = info_.joints[i];
 
@@ -113,241 +75,291 @@ YAMPhysicalHardware::on_init(
                 joint.command_interfaces[0].name != "position")
             {
                 throw std::runtime_error(
-                    "Joint must have one position command interface: " +
-                    joint.name);
+                    "Joint requires one position command interface");
             }
 
             if (joint.state_interfaces.size() != 2)
             {
                 throw std::runtime_error(
-                    "Joint must have two state interfaces: " +
-                    joint.name);
+                    "Joint requires position and velocity states");
             }
 
-            bool has_position = false;
-            bool has_velocity = false;
+            bool position_found = false;
+            bool velocity_found = false;
 
-            for (const auto &interface :
-                 joint.state_interfaces)
+            for (const auto &interface : joint.state_interfaces)
             {
                 if (interface.name == "position")
                 {
-                    has_position = true;
+                    position_found = true;
                 }
 
                 if (interface.name == "velocity")
                 {
-                    has_velocity = true;
+                    velocity_found = true;
                 }
             }
 
-            if (!has_position || !has_velocity)
+            if (!position_found || !velocity_found)
             {
                 throw std::runtime_error(
-                    "Missing position or velocity state: " +
-                    joint.name);
+                    "Missing joint state interface");
             }
         }
 
-        // Open native Linux SocketCAN connection.
-        // This does not enable the motors.
-        can_driver_ =
-            std::make_unique<YAMCanDriver>(can_channel_);
+        register_reader_ =
+            std::make_unique<YAMCanRegisterReader>(
+                can_channel_);
 
-        positions_.fill(0.0);
-        velocities_.fill(0.0);
-        commands_.fill(0.0);
+        const double nan =
+            std::numeric_limits<double>::quiet_NaN();
 
-        enabled_ = false;
+        positions_.fill(nan);
+        velocities_.fill(nan);
+        commands_.fill(nan);
+
         initialized_ = true;
+        active_ = false;
+        read_only_mode_ = true;
+        has_previous_read_ = false;
 
-        RCLCPP_INFO(
-            rclcpp::get_logger("YAMPhysicalHardware"),
-            "Physical YAM hardware initialized");
-
-        RCLCPP_INFO(
-            rclcpp::get_logger("YAMPhysicalHardware"),
-            "Role: %s | CAN interface: %s",
-            role_.c_str(),
+        RCLCPP_WARN(
+            logger(),
+            "YAM follower connected on %s in READ-ONLY mode. "
+            "No motor commands can be transmitted. "
+            "Positions are raw xout telemetry, "
+            "NOT calibrated URDF joint angles.",
             can_channel_.c_str());
 
-        RCLCPP_INFO(
-            rclcpp::get_logger("YAMPhysicalHardware"),
-            "Using YAM V1 motor configuration");
-
-        RCLCPP_INFO(
-            rclcpp::get_logger("YAMPhysicalHardware"),
-            "Motor activation remains disabled");
+        return hardware_interface::CallbackReturn::SUCCESS;
     }
     catch (const std::exception &e)
     {
-        initialized_ = false;
-        enabled_ = false;
-
         RCLCPP_ERROR(
-            rclcpp::get_logger("YAMPhysicalHardware"),
-            "Initialization failed: %s",
+            logger(),
+            "Hardware initialization failed: %s",
             e.what());
+
+        initialized_ = false;
+        active_ = false;
 
         return hardware_interface::CallbackReturn::ERROR;
     }
-
-    return hardware_interface::CallbackReturn::SUCCESS;
 }
 
-
 // ============================================================
-// EXPORT JOINT STATE INTERFACES
+// STATE INTERFACES
 // ============================================================
 
 std::vector<hardware_interface::StateInterface>
 YAMPhysicalHardware::export_state_interfaces()
 {
-    std::vector<hardware_interface::StateInterface>
-        interfaces;
+    std::vector<hardware_interface::StateInterface> result;
 
-    for (size_t i = 0; i < JOINT_COUNT; ++i)
+    for (std::size_t i = 0; i < JOINT_COUNT; ++i)
     {
-        const auto &name = info_.joints[i].name;
-
-        interfaces.emplace_back(
-            name,
+        result.emplace_back(
+            info_.joints[i].name,
             "position",
             &positions_[i]);
 
-        interfaces.emplace_back(
-            name,
+        result.emplace_back(
+            info_.joints[i].name,
             "velocity",
             &velocities_[i]);
     }
 
-    return interfaces;
+    return result;
 }
 
-
 // ============================================================
-// EXPORT JOINT COMMAND INTERFACES
+// COMMAND INTERFACES
 // ============================================================
 
 std::vector<hardware_interface::CommandInterface>
 YAMPhysicalHardware::export_command_interfaces()
 {
-    std::vector<hardware_interface::CommandInterface>
-        interfaces;
+    std::vector<hardware_interface::CommandInterface> result;
 
-    for (size_t i = 0; i < JOINT_COUNT; ++i)
+    for (std::size_t i = 0; i < JOINT_COUNT; ++i)
     {
-        interfaces.emplace_back(
+        result.emplace_back(
             info_.joints[i].name,
             "position",
             &commands_[i]);
     }
 
-    return interfaces;
+    // Exported for interface compatibility.
+    // write() intentionally never acts on these commands.
+
+    return result;
 }
 
+// ============================================================
+// ACQUIRE RAW MOTOR POSITIONS
+// ============================================================
+
+bool YAMPhysicalHardware::acquire_positions(
+    std::array<double, JOINT_COUNT> &measurements)
+{
+    if (!register_reader_)
+    {
+        return false;
+    }
+
+    try
+    {
+        for (std::size_t i = 0; i < JOINT_COUNT; ++i)
+        {
+            const float value =
+                register_reader_->read_float_register(
+                    motor_ids_[i],
+                    XOUT_REGISTER);
+
+            if (!std::isfinite(value))
+            {
+                throw std::runtime_error(
+                    "Invalid xout position");
+            }
+
+            measurements[i] =
+                static_cast<double>(value);
+        }
+
+        return true;
+    }
+    catch (const std::exception &e)
+    {
+        RCLCPP_ERROR(
+            logger(),
+            "Motor feedback acquisition failed: %s",
+            e.what());
+
+        return false;
+    }
+}
 
 // ============================================================
-// ACTIVATE HARDWARE
+// READ-ONLY ACTIVATION
 // ============================================================
 
 hardware_interface::CallbackReturn
 YAMPhysicalHardware::on_activate(
     const rclcpp_lifecycle::State &)
 {
-    if (!initialized_ || !can_driver_)
+    if (!initialized_ ||
+        !register_reader_ ||
+        !read_only_mode_)
+    {
+        return hardware_interface::CallbackReturn::ERROR;
+    }
+
+    std::array<double, JOINT_COUNT> measurements{};
+
+    if (!acquire_positions(measurements))
     {
         RCLCPP_ERROR(
-            rclcpp::get_logger("YAMPhysicalHardware"),
-            "Cannot activate uninitialized hardware");
+            logger(),
+            "Cannot activate diagnostics without "
+            "valid feedback from all six motors");
 
         return hardware_interface::CallbackReturn::ERROR;
     }
 
-    // Physical motor activation must remain disabled
-    // until startup validation, real feedback,
-    // gravity compensation, command alignment,
-    // and fault handling are implemented.
+    // Initialize from actual measured raw positions.
+    positions_ = measurements;
 
-    enabled_ = false;
+    velocities_.fill(0.0);
 
-    RCLCPP_ERROR(
-        rclcpp::get_logger("YAMPhysicalHardware"),
-        "Activation blocked: physical startup and "
-        "safe control integration are incomplete");
+    // This initializes command buffers only.
+    // It does NOT command the motors to hold.
+    commands_ = positions_;
 
-    return hardware_interface::CallbackReturn::ERROR;
+    active_ = true;
+    has_previous_read_ = false;
+
+    RCLCPP_WARN(
+        logger(),
+        "READ-ONLY YAM follower diagnostics activated. "
+        "All six motors responded. "
+        "Motor enable and position control remain BLOCKED.");
+
+    return hardware_interface::CallbackReturn::SUCCESS;
 }
 
-
 // ============================================================
-// DEACTIVATE HARDWARE
+// DEACTIVATION
 // ============================================================
 
 hardware_interface::CallbackReturn
 YAMPhysicalHardware::on_deactivate(
     const rclcpp_lifecycle::State &)
 {
-    enabled_ = false;
+    active_ = false;
+    has_previous_read_ = false;
 
     RCLCPP_INFO(
-        rclcpp::get_logger("YAMPhysicalHardware"),
-        "Physical YAM control deactivated");
-
-    // This does not send a motor disable or hold command.
-    // Physical shutdown handling is still required.
+        logger(),
+        "YAM read-only diagnostics deactivated");
 
     return hardware_interface::CallbackReturn::SUCCESS;
 }
 
-
 // ============================================================
-// READ ACTUAL MOTOR FEEDBACK
+// READ MOTOR FEEDBACK
 // ============================================================
 
 hardware_interface::return_type
 YAMPhysicalHardware::read(
-    const rclcpp::Time &,
+    const rclcpp::Time &time,
     const rclcpp::Duration &)
 {
-    if (!enabled_)
+    if (!active_ || !register_reader_)
     {
         return hardware_interface::return_type::ERROR;
     }
 
-    // motor_states_ must contain validated, fresh
-    // motor feedback before this method can operate.
+    std::array<double, JOINT_COUNT> measurements{};
 
-    for (size_t i = 0; i < JOINT_COUNT; ++i)
+    if (!acquire_positions(measurements))
     {
-        if (!std::isfinite(motor_states_[i].position) ||
-            !std::isfinite(motor_states_[i].velocity))
+        active_ = false;
+        has_previous_read_ = false;
+
+        return hardware_interface::return_type::ERROR;
+    }
+
+    const double dt = has_previous_read_
+        ? (time - last_read_time_).seconds()
+        : 0.0;
+
+    for (std::size_t i = 0; i < JOINT_COUNT; ++i)
+    {
+        // Numerical derivative of raw xout.
+        // Not yet a calibrated joint velocity.
+        if (has_previous_read_ &&
+            std::isfinite(dt) &&
+            dt > 0.0)
         {
-            RCLCPP_ERROR(
-                rclcpp::get_logger("YAMPhysicalHardware"),
-                "Invalid motor feedback for joint %zu",
-                i + 1);
-
-            enabled_ = false;
-
-            return hardware_interface::return_type::ERROR;
+            velocities_[i] =
+                (measurements[i] - positions_[i]) / dt;
+        }
+        else
+        {
+            velocities_[i] = 0.0;
         }
 
-        positions_[i] =
-            (motor_states_[i].position - offsets_[i]) *
-            directions_[i];
-
-        velocities_[i] =
-            motor_states_[i].velocity *
-            directions_[i];
+        positions_[i] = measurements[i];
     }
+
+    last_read_time_ = time;
+    has_previous_read_ = true;
 
     return hardware_interface::return_type::OK;
 }
 
-
 // ============================================================
-// WRITE MOTOR COMMANDS
+// WRITE: DELIBERATELY NON-ACTUATING
 // ============================================================
 
 hardware_interface::return_type
@@ -355,86 +367,24 @@ YAMPhysicalHardware::write(
     const rclcpp::Time &,
     const rclcpp::Duration &)
 {
-    if (!enabled_)
+    if (!active_ || !read_only_mode_)
     {
         return hardware_interface::return_type::ERROR;
     }
 
-    // The leader requires gravity-compensation control,
-    // not follower-style position control.
-    if (role_ != "follower")
-    {
-        RCLCPP_ERROR(
-            rclcpp::get_logger("YAMPhysicalHardware"),
-            "Position-control write is not valid "
-            "for the gravity-compensated leader");
-
-        enabled_ = false;
-
-        return hardware_interface::return_type::ERROR;
-    }
-
-    try
-    {
-        // Reject invalid commands before sending
-        // any CAN frames during this cycle.
-        for (size_t i = 0; i < JOINT_COUNT; ++i)
-        {
-            if (!std::isfinite(commands_[i]))
-            {
-                throw std::runtime_error(
-                    "Non-finite position command for joint " +
-                    std::to_string(i + 1));
-            }
-        }
-
-        for (size_t i = 0; i < JOINT_COUNT; ++i)
-        {
-            MotorCommand cmd;
-
-            // Convert ROS joint position to
-            // the motor coordinate system.
-            cmd.position =
-                commands_[i] * directions_[i] +
-                offsets_[i];
-
-            cmd.velocity = 0.0;
-
-            // Actual YAM V1 position-controller gains.
-            cmd.kp = kp_[i];
-            cmd.kd = kd_[i];
-
-            cmd.torque = 0.0;
-
-            // Actual SocketCAN motor communication.
-            motor_states_[i] =
-                can_driver_->exchange(
-                    motor_ids_[i],
-                    response_ids_[i],
-                    motor_types_[i],
-                    cmd,
-                    10);
-        }
-    }
-    catch (const std::exception &e)
-    {
-        enabled_ = false;
-
-        RCLCPP_ERROR(
-            rclcpp::get_logger("YAMPhysicalHardware"),
-            "Motor communication failed: %s",
-            e.what());
-
-        return hardware_interface::return_type::ERROR;
-    }
+    // SAFETY INTERLOCK:
+    //
+    // Do not send any CAN commands here.
+    //
+    // Position controllers may update commands_, but
+    // motor enable, torque commands and position tracking
+    // are NOT implemented in this diagnostic stage.
 
     return hardware_interface::return_type::OK;
 }
 
 } // namespace yam_ros2_control
 
-
 PLUGINLIB_EXPORT_CLASS(
     yam_ros2_control::YAMPhysicalHardware,
     hardware_interface::SystemInterface)
-
