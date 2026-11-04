@@ -10,9 +10,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
-
-find_package(rclcpp REQUIRED)
-find_package(sensor_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 
 add_executable(yam_leader src/leader_node.cpp)
 ament_target_dependencies(yam_leader rclcpp sensor_msgs)
@@ -21,7 +19,11 @@ ament_target_dependencies(yam_leader rclcpp sensor_msgs)
 add_executable(yam_follower src/follower_node.cpp)
 ament_target_dependencies(yam_follower rclcpp sensor_msgs std_msgs)
 
+add_executable(yam_live_bridge src/yam_live_bridge.cpp)
+ament_target_dependencies(yam_live_bridge rclcpp sensor_msgs std_msgs std_srvs)
+
 install(TARGETS
+  yam_live_bridge
   yam_leader
   yam_follower
   DESTINATION lib/${PROJECT_NAME}

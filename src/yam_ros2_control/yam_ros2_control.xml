@@ -26,4 +26,11 @@
     </class>
   </library>
 
+  <library path="yam_live_hardware">
+    <class name="yam_ros2_control/YAMLiveHardware"
+           type="yam_ros2_control::YAMLiveHardware"
+           base_class_type="hardware_interface::SystemInterface">
+      <description>Explicitly gated physical leader/follower YAM implementation</description>
+    </class>
+  </library>
 </class_libraries>

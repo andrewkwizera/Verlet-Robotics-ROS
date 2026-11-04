@@ -106,9 +106,24 @@ namespace yam_ros2_control
         YAMCanRegisterReader &operator=(
             const YAMCanRegisterReader &) = delete;
 
-        float read_float_register(
-            uint8_t motor_id,
-            uint8_t register_address)
+        float read_float_register(uint8_t motor_id, uint8_t register_address)
+        {
+            const uint32_t bits = read_register_bits(motor_id, register_address);
+            float value = 0.0f;
+            std::memcpy(&value, &bits, sizeof(value));
+            if (!std::isfinite(value)) {
+                throw std::runtime_error("Non-finite float register reading");
+            }
+            return value;
+        }
+
+        uint32_t read_uint_register(uint8_t motor_id, uint8_t register_address)
+        {
+            return read_register_bits(motor_id, register_address);
+        }
+
+    private:
+        uint32_t read_register_bits(uint8_t motor_id, uint8_t register_address)
         {
             if (motor_id < 1 || motor_id > 6)
             {
@@ -231,20 +246,7 @@ namespace yam_ros2_control
                         (uint32_t(response.data[6]) << 16) |
                         (uint32_t(response.data[7]) << 24);
 
-                    float value = 0.0f;
-
-                    std::memcpy(
-                        &value,
-                        &bits,
-                        sizeof(value));
-
-                    if (!std::isfinite(value))
-                    {
-                        throw std::runtime_error(
-                            "Non-finite motor register value");
-                    }
-
-                    return value;
+                    return bits;
                 }
 
                 std::this_thread::sleep_for(
@@ -257,7 +259,6 @@ namespace yam_ros2_control
                 " did not respond");
         }
 
-    private:
         void drain_frames()
         {
             while (true)

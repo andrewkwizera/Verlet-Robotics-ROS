@@ -344,4 +344,19 @@ MotorState YAMCanDriver::enable_motor(
     response_id, type, timeout_ms);
 }
 
+void YAMCanDriver::disable_motor(uint32_t motor_id)
+{
+  if (motor_id < 1 || motor_id > 6) {
+    throw std::runtime_error("Invalid motor ID for disable");
+  }
+  can_frame tx{};
+  tx.can_id = motor_id;
+  tx.can_dlc = 8;
+  for (std::size_t i = 0; i < 7; ++i) { tx.data[i] = 0xFF; }
+  tx.data[7] = 0xFD;
+  if (::write(socket_fd_, &tx, sizeof(tx)) != sizeof(tx)) {
+    throw std::runtime_error("Failed to send motor disable frame");
+  }
+}
+
 }  // namespace yam_ros2_control

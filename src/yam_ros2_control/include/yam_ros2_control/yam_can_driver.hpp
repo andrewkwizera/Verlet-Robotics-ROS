@@ -67,6 +67,9 @@ public:
     MotorType type,
     int timeout_ms = 20);
 
+  // Sends DM MIT motor-off frame (FF ... FD). Only when the arm is supported.
+  void disable_motor(uint32_t motor_id);
+
   // Receives and validates feedback for a specific motor.
   MotorState wait_for_feedback(
     uint32_t response_id,
