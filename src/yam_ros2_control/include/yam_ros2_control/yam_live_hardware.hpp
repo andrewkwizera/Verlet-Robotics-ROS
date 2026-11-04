@@ -71,6 +71,13 @@ private:
   // physical YAM startup pose on both hardware instances.
   KDL::Chain gravity_chain_;
   std::unique_ptr<KDL::ChainFkSolverPos_recursive> gravity_fk_;
+  // Finger masses are beyond the six-actuator arm chain. Model each branch
+  // at its zero-opening (closed) configuration; never ignore its inertia.
+  std::array<KDL::Chain, 2> finger_chains_;
+  std::array<std::unique_ptr<KDL::ChainFkSolverPos_recursive>, 2> finger_fk_;
+  double follow_speed_limit_ = 0.25;  // rad/s; configurable only at startup
+  static constexpr double FOLLOW_ACCEL_LIMIT = 2.0;  // rad/s^2, conservative ramp
+  std::array<double, N> follower_speed_{ };
   std::string role_, channel_;
   bool initialized_ = false;
   bool active_ = false;

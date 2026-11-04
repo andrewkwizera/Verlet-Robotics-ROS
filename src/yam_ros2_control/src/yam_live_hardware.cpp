@@ -20,7 +20,6 @@ auto logger() { return rclcpp::get_logger("YAMLiveHardware"); }
 bool yes(const std::string& v) { return v == "true" || v == "1"; }
 constexpr double MOTOR_RANGE = 25.0;
 constexpr double MAX_ENCODER_STEP = 0.35;  // rad/servo iteration
-constexpr double MAX_FOLLOW_VELOCITY = 0.25; // rad/s; deliberately slower than I2RT
 constexpr double MAX_FOLLOW_ERROR = 0.20;
 constexpr double JOINT_MARGIN = 0.08;
 constexpr double MAX_STARTUP_SENSOR_DISAGREEMENT = 0.15; // xout vs MIT feedback
@@ -46,6 +45,12 @@ hardware_interface::CallbackReturn YAMLiveHardware::on_init(
       throw std::runtime_error("Unexpected role/CAN mapping; refusing to drive other bus");
     }
     allow_actuation_ = yes(info_.hardware_parameters.at("allow_actuation"));
+    follow_speed_limit_ = std::stod(info_.hardware_parameters.at("follower_speed"));
+    if (!std::isfinite(follow_speed_limit_) ||
+        follow_speed_limit_ < 0.05 || follow_speed_limit_ > 0.50) {
+      throw std::runtime_error(
+        "follower_speed must be 0.05..0.50 rad/s; this is a software command limit, not a verified safe motor speed");
+    }
     calibrated_ = yes(info_.hardware_parameters.at("calibration_verified"));
     estop_confirmed_ = yes(info_.hardware_parameters.at("emergency_stop_verified"));
     for (std::size_t i = 0; i < N; ++i) {
@@ -67,6 +72,7 @@ hardware_interface::CallbackReturn YAMLiveHardware::on_init(
     positions_.fill(std::numeric_limits<double>::quiet_NaN());
     commands_.fill(std::numeric_limits<double>::quiet_NaN());
     velocities_.fill(0.0);
+    follower_speed_.fill(0.0);
     unwrapped_ready_.fill(false);
     motor_enabled_.fill(false);
     registers_ = std::make_unique<YAMCanRegisterReader>(channel_);
@@ -85,6 +91,15 @@ hardware_interface::CallbackReturn YAMLiveHardware::on_init(
       }
       gravity_chain_ = chain;
       gravity_fk_ = std::make_unique<KDL::ChainFkSolverPos_recursive>(gravity_chain_);
+      for (std::size_t k = 0; k < 2; ++k) {
+        const std::string tip = k == 0 ? "tip_left" : "tip_right";
+        if (!tree.getChain("base", tip, finger_chains_[k]) ||
+            finger_chains_[k].getNrOfJoints() != N + 1) {
+          throw std::runtime_error("Missing seven-joint gravity path to " + tip);
+        }
+        finger_fk_[k] = std::make_unique<KDL::ChainFkSolverPos_recursive>(
+          finger_chains_[k]);
+      }
       // Reject a broken dynamics model before any actuator is enabled.
       KDL::JntArray neutral(N);
       for (std::size_t i = 0; i < N; ++i) neutral(i) = 0.0;
@@ -224,6 +239,25 @@ double YAMLiveHardware::gravitational_potential(const KDL::JntArray &q) const {
     }
     potential += mass * G * z;
   }
+  // The original gravity chain terminates at "gripper", and therefore
+  // omits tip_left and tip_right entirely. Both fingers contribute gravity
+  // loading to arm joints 1..6 even when their prismatic DOFs are not driven.
+  // Here finger positions are modeled closed (zero prismatic displacement).
+  KDL::JntArray q_with_finger(N + 1);
+  for (std::size_t i = 0; i < N; ++i) q_with_finger(i) = q(i);
+  q_with_finger(N) = 0.0;
+  for (std::size_t k = 0; k < 2; ++k) {
+    if (!finger_fk_[k]) throw std::runtime_error("Finger gravity FK missing");
+    KDL::Frame pose;
+    const int rc = finger_fk_[k]->JntToCart(q_with_finger, pose);
+    if (rc < 0) throw std::runtime_error("Finger gravity FK failed");
+    const auto &inertia = finger_chains_[k].getSegment(
+      finger_chains_[k].getNrOfSegments() - 1).getInertia();
+    const double mass = inertia.getMass();
+    if (!std::isfinite(mass) || mass <= 0.0)
+      throw std::runtime_error("Invalid gripper finger inertial mass");
+    potential += mass * G * (pose * inertia.getCOG()).z();
+  }
   if (!std::isfinite(potential)) {
     throw std::runtime_error("Non-finite gravitational potential");
   }
@@ -300,6 +334,7 @@ hardware_interface::CallbackReturn YAMLiveHardware::on_activate(
     commands_ = positions_; // hold ACTUAL measured position, not arbitrary zero
     startup_hold_ = positions_;
     follower_setpoint_ = positions_;
+    follower_speed_.fill(0.0);
     follower_command_seen_ = false;
     if (!allow_actuation_) {
       active_ = true;
@@ -341,6 +376,7 @@ hardware_interface::CallbackReturn YAMLiveHardware::on_activate(
     commands_ = positions_;
     startup_hold_ = positions_;
     follower_setpoint_ = positions_;
+    follower_speed_.fill(0.0);
     follower_command_seen_ = false;
     last_cycle_ = std::chrono::steady_clock::now();
     active_ = true;
@@ -377,12 +413,14 @@ hardware_interface::return_type YAMLiveHardware::perform_command_mode_switch(
     if (active_) {
       startup_hold_ = positions_;
       follower_setpoint_ = positions_;
+      follower_speed_.fill(0.0);
     }
   }
   if (std::find(start_interfaces.begin(), start_interfaces.end(), first_joint) !=
       start_interfaces.end()) {
     follower_controller_claimed_ = true;
     follower_command_seen_ = false;
+    follower_speed_.fill(0.0);
     follower_command_ready_at_ = std::chrono::steady_clock::now() +
       std::chrono::milliseconds(300);
     RCLCPP_INFO(logger(), "Follower controller claimed position interfaces; startup hold continues for 300 ms");
@@ -446,6 +484,7 @@ hardware_interface::return_type YAMLiveHardware::write(
         }
         if (aligned) {
           follower_setpoint_ = positions_;  // begin commanded trajectory at physical pose
+          follower_speed_.fill(0.0);
           follower_command_seen_ = true;
           RCLCPP_INFO(logger(), "Follower accepted aligned ROS position-controller commands");
         }
@@ -470,9 +509,27 @@ hardware_interface::return_type YAMLiveHardware::write(
             " error=" + std::to_string(error) +
             " (limit=" + std::to_string(MAX_FOLLOW_ERROR) + " rad)");
         }
-        const double advance = std::clamp(
-          requested[i] - follower_setpoint_[i],
-          -MAX_FOLLOW_VELOCITY * dt, MAX_FOLLOW_VELOCITY * dt);
+        // Speed and acceleration are bounded; velocity feedforward is sent
+        // to the MIT servo rather than always asking for zero velocity.
+        const double remaining = requested[i] - follower_setpoint_[i];
+        const double requested_speed = std::clamp(
+          remaining / dt, -follow_speed_limit_, follow_speed_limit_);
+        const double dv = std::clamp(
+          requested_speed - follower_speed_[i],
+          -FOLLOW_ACCEL_LIMIT * dt, FOLLOW_ACCEL_LIMIT * dt);
+        double next_speed = follower_speed_[i] + dv;
+        double advance = next_speed * dt;
+        // Never advance *away* from the new target after a sudden reversal,
+        // nor overshoot the requested position during deceleration.
+        if (remaining == 0.0 || (advance != 0.0 &&
+            std::signbit(advance) != std::signbit(remaining))) {
+          advance = 0.0;
+          next_speed = 0.0;
+        } else if (std::abs(advance) > std::abs(remaining)) {
+          advance = remaining;
+          next_speed = advance / dt;
+        }
+        follower_speed_[i] = next_speed;
         follower_setpoint_[i] += advance;
         const double servo_error = follower_setpoint_[i] - positions_[i];
         if (!std::isfinite(servo_error) || std::abs(servo_error) > MAX_FOLLOW_ERROR) {
@@ -481,7 +538,7 @@ hardware_interface::return_type YAMLiveHardware::write(
         }
         const double absolute_motor_target = follower_setpoint_[i] + offsets_[i];
         outputs[i] = {
-          std::remainder(absolute_motor_target, MOTOR_RANGE), 0.0,
+          std::remainder(absolute_motor_target, MOTOR_RANGE), follower_speed_[i],
           kp_[i], kd_[i], gravity[i]};
       }
     }
