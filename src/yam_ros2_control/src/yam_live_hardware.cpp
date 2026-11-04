@@ -299,6 +299,7 @@ hardware_interface::CallbackReturn YAMLiveHardware::on_activate(
     }
     commands_ = positions_; // hold ACTUAL measured position, not arbitrary zero
     startup_hold_ = positions_;
+    follower_setpoint_ = positions_;
     follower_command_seen_ = false;
     if (!allow_actuation_) {
       active_ = true;
@@ -309,6 +310,11 @@ hardware_interface::CallbackReturn YAMLiveHardware::on_activate(
     // Compute every feedforward torque BEFORE any motor enable command.
     // Both follower HOLD and leader FLOAT include gravity compensation.
     auto gravity = gravity_torques();
+    RCLCPP_INFO(logger(),
+      "%s gravity feedforward at measured startup pose [Nm]: "
+      "j1=%.3f j2=%.3f j3=%.3f j4=%.3f j5=%.3f j6=%.3f",
+      role_.c_str(), gravity[0], gravity[1], gravity[2],
+      gravity[3], gravity[4], gravity[5]);
     control_bus_ = std::make_unique<YAMCanDriver>(channel_);
     for (std::size_t i=0; i<N; ++i) {
       const auto id = static_cast<uint32_t>(i + 1);
@@ -334,6 +340,7 @@ hardware_interface::CallbackReturn YAMLiveHardware::on_activate(
     }
     commands_ = positions_;
     startup_hold_ = positions_;
+    follower_setpoint_ = positions_;
     follower_command_seen_ = false;
     last_cycle_ = std::chrono::steady_clock::now();
     active_ = true;
@@ -367,7 +374,10 @@ hardware_interface::return_type YAMLiveHardware::perform_command_mode_switch(
       stop_interfaces.end()) {
     follower_controller_claimed_ = false;
     follower_command_seen_ = false;
-    if (active_) startup_hold_ = positions_;
+    if (active_) {
+      startup_hold_ = positions_;
+      follower_setpoint_ = positions_;
+    }
   }
   if (std::find(start_interfaces.begin(), start_interfaces.end(), first_joint) !=
       start_interfaces.end()) {
@@ -435,6 +445,7 @@ hardware_interface::return_type YAMLiveHardware::write(
           }
         }
         if (aligned) {
+          follower_setpoint_ = positions_;  // begin commanded trajectory at physical pose
           follower_command_seen_ = true;
           RCLCPP_INFO(logger(), "Follower accepted aligned ROS position-controller commands");
         }
@@ -443,13 +454,32 @@ hardware_interface::return_type YAMLiveHardware::write(
         throw std::runtime_error("Follower commanded target outside joint limits");
       const auto &requested = follower_command_seen_ ? commands_ : startup_hold_;
       for (std::size_t i=0; i<N; ++i) {
+        // TWO different quantities must not be confused:
+        //   requested - measured: whole-loop tracking error (fault guard)
+        //   requested - setpoint: remaining distance in the commanded trajectory
+        // The previous implementation reset the target to measured + 0.005 rad
+        // EVERY 20-ms cycle; that capped the motor's proportional correction to
+        // ~0.4 Nm (large joints) or ~0.05 Nm (small joints) and the follower
+        // could drift instead of moving toward the leader. Here, the target
+        // progresses cumulatively at a bounded joint speed.
         const double error = requested[i] - positions_[i];
-        if (std::abs(error) > MAX_FOLLOW_ERROR)
-          throw std::runtime_error("Follower position error >0.20 rad on joint " +
-            std::to_string(i+1));
-        const double limited_target = positions_[i] + std::clamp(
-          error, -MAX_FOLLOW_VELOCITY * dt, MAX_FOLLOW_VELOCITY * dt);
-        const double absolute_motor_target = limited_target + offsets_[i];
+        if (!std::isfinite(error) || std::abs(error) > MAX_FOLLOW_ERROR) {
+          throw std::runtime_error("Follower position error on joint " +
+            std::to_string(i+1) + " commanded=" + std::to_string(requested[i]) +
+            " measured=" + std::to_string(positions_[i]) +
+            " error=" + std::to_string(error) +
+            " (limit=" + std::to_string(MAX_FOLLOW_ERROR) + " rad)");
+        }
+        const double advance = std::clamp(
+          requested[i] - follower_setpoint_[i],
+          -MAX_FOLLOW_VELOCITY * dt, MAX_FOLLOW_VELOCITY * dt);
+        follower_setpoint_[i] += advance;
+        const double servo_error = follower_setpoint_[i] - positions_[i];
+        if (!std::isfinite(servo_error) || std::abs(servo_error) > MAX_FOLLOW_ERROR) {
+          throw std::runtime_error("Follower servo lag exceeds limit on joint " +
+            std::to_string(i+1) + ": " + std::to_string(servo_error) + " rad");
+        }
+        const double absolute_motor_target = follower_setpoint_[i] + offsets_[i];
         outputs[i] = {
           std::remainder(absolute_motor_target, MOTOR_RANGE), 0.0,
           kp_[i], kd_[i], gravity[i]};

@@ -57,6 +57,8 @@ private:
   std::array<double,N> velocities_{};
   std::array<double,N> commands_{};
   std::array<double,N> startup_hold_{};
+  // Persistent joint-space servo target; never reset it to measured feedback each cycle.
+  std::array<double,N> follower_setpoint_{};
   std::array<double,N> raw_unwrapped_{};
   std::array<double,N> raw_last_{};
   std::array<bool,N> unwrapped_ready_{};
