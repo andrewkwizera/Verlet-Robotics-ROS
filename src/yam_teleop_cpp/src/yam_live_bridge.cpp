@@ -4,9 +4,12 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <iomanip>
+#include <sstream>
 #include <iterator>
 #include <memory>
 #include <string>
+#include <stdexcept>
 #include <vector>
 
 #include "rclcpp/rclcpp.hpp"
@@ -22,6 +25,10 @@ public:
   YAMLiveBridge() : Node("yam_live_bridge") {
     actuation_authorized_ = declare_parameter<bool>("actuation_authorized", false);
     auto_track_ = declare_parameter<bool>("auto_track", false);
+    command_rate_ = declare_parameter<double>("follower_speed", 0.25);
+    if (!std::isfinite(command_rate_) || command_rate_ < 0.05 || command_rate_ > 0.50) {
+      throw std::runtime_error("follower_speed must be in [0.05, 0.50] rad/s");
+    }
     leader_sub_ = create_subscription<sensor_msgs::msg::JointState>(
       "/leader/joint_states", rclcpp::SensorDataQoS(),
       [this](sensor_msgs::msg::JointState::ConstSharedPtr m) { record(m, leader_); });
@@ -53,6 +60,7 @@ public:
         res->message = "TRACKING ARMED: move the physical leader slowly";
       });
     start_ = Clock::now();
+    last_tick_ = start_;
     timer_ = create_wall_timer(20ms, [this] { tick(); });
     status_timer_ = create_wall_timer(1s, [this] { publish_status(); });
     RCLCPP_WARN(get_logger(),
@@ -66,8 +74,6 @@ private:
   static constexpr auto STATE_TIMEOUT = 250ms;
   static constexpr double ARM_TOLERANCE = 0.10;  // rad, all joints
   static constexpr double SEPARATION_LIMIT = 0.35; // rad; disarm on unexpectedly large gap
-  static constexpr double COMMAND_RATE = 0.20; // rad/s; lower than hardware 0.25 rad/s
-  static constexpr double STEP = COMMAND_RATE / 50.0;
 
   struct State {
     std::array<double,N> q{};
@@ -139,6 +145,10 @@ private:
   }
 
   void tick() {
+    const auto now = Clock::now();
+    const double dt = std::clamp(std::chrono::duration<double>(now-last_tick_).count(),
+                                 0.001, 0.04);
+    last_tick_ = now;
     if (!fresh(follower_)) {
       if (tracking_) disarm("Follower feedback lost");
       return; // Hardware will independently fault on missing CAN/servo cycles.
@@ -157,19 +167,25 @@ private:
         disarm("Leader stream stale");
         auto_armed_once_ = true;
       } else {
-        bool separated = false;
+        double max_gap = 0.0;
+        std::size_t gap_joint = 0;
         for (std::size_t i=0; i<N; ++i) {
-          if (std::abs(leader_.q[i] - follower_.q[i]) > SEPARATION_LIMIT) {
-            separated = true;
-          }
+          const double gap = std::abs(leader_.q[i] - follower_.q[i]);
+          if (gap > max_gap) { max_gap = gap; gap_joint = i; }
         }
-        if (separated) {
-          disarm("Leader/follower separation above 0.35 rad");
+        if (max_gap > SEPARATION_LIMIT) {
+          std::ostringstream reason;
+          reason << "Leader/follower separation " << max_gap
+                 << " rad on joint " << gap_joint + 1
+                 << " exceeds " << SEPARATION_LIMIT
+                 << " rad (configured command speed " << command_rate_ << " rad/s)";
+          disarm(reason.str());
           auto_armed_once_ = true;
         } else {
           for (std::size_t i=0; i<N; ++i) {
             const auto difference = leader_.q[i] - command_[i];
-            command_[i] += std::clamp(difference, -STEP, STEP);
+            command_[i] += std::clamp(difference,
+              -command_rate_ * dt, command_rate_ * dt);
           }
         }
       }
@@ -180,22 +196,44 @@ private:
   }
 
   void publish_status() {
+    double max_gap = 0.0;
+    double max_command_gap = 0.0;
+    std::size_t gap_joint = 0;
+    if (fresh(leader_) && fresh(follower_)) {
+      for (std::size_t i=0; i<N; ++i) {
+        const double gap = std::abs(leader_.q[i] - follower_.q[i]);
+        if (gap > max_gap) { max_gap = gap; gap_joint = i + 1; }
+        if (have_command_) {
+          max_command_gap = std::max(max_command_gap,
+            std::abs(command_[i] - follower_.q[i]));
+        }
+      }
+    }
+    std::ostringstream status;
+    status << std::fixed << std::setprecision(3)
+      << "tracking=" << (tracking_ ? "ENABLED" : "DISABLED")
+      << " leader=" << (fresh(leader_) ? "FRESH" : "STALE")
+      << " follower=" << (fresh(follower_) ? "FRESH" : "STALE")
+      << " actuation_authorized=" << (actuation_authorized_ ? "true" : "false")
+      << " max_separation_rad=" << max_gap
+      << " worst_joint=" << gap_joint
+      << " command_gap_rad=" << max_command_gap
+      << " follower_speed_rad_s=" << command_rate_;
     std_msgs::msg::String s;
-    s.data = std::string("tracking=") + (tracking_ ? "ENABLED" : "DISABLED") +
-      " leader=" + (fresh(leader_) ? "FRESH" : "STALE") +
-      " follower=" + (fresh(follower_) ? "FRESH" : "STALE") +
-      " actuation_authorized=" + (actuation_authorized_ ? "true" : "false");
+    s.data = status.str();
     status_pub_->publish(s);
   }
 
   State leader_, follower_;
   std::array<double,N> command_{};
+  double command_rate_ = 0.25;
   bool actuation_authorized_ = false;
   bool auto_track_ = false;
   bool tracking_ = false;
   bool have_command_ = false;
   bool auto_armed_once_ = false;
   Clock::time_point start_{};
+  Clock::time_point last_tick_{};
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr leader_sub_,follower_sub_;
   rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr cmd_pub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status_pub_;

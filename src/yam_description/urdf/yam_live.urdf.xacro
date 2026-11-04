@@ -5,6 +5,7 @@
   <xacro:arg name="allow_actuation" default="false"/>
   <xacro:arg name="calibration_verified" default="false"/>
   <xacro:arg name="emergency_stop_verified" default="false"/>
+  <xacro:arg name="follower_speed" default="0.25"/>
   <xacro:arg name="offset_1" default="0.0"/>
   <xacro:arg name="offset_2" default="0.0"/>
   <xacro:arg name="offset_3" default="0.0"/>
@@ -21,6 +22,7 @@
       <param name="allow_actuation">$(arg allow_actuation)</param>
       <param name="calibration_verified">$(arg calibration_verified)</param>
       <param name="emergency_stop_verified">$(arg emergency_stop_verified)</param>
+      <param name="follower_speed">$(arg follower_speed)</param>
       <param name="model_file">$(find yam_description)/urdf/yam.urdf</param>
       <param name="offset_1">$(arg offset_1)</param>
       <param name="offset_2">$(arg offset_2)</param>
