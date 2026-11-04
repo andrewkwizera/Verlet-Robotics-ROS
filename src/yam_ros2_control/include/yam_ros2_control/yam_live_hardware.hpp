@@ -16,7 +16,8 @@
 #include "rclcpp_lifecycle/state.hpp"
 #include "yam_ros2_control/yam_can_driver.hpp"
 #include "yam_ros2_control/yam_can_register_reader.hpp"
-#include <kdl/chaindynparam.hpp>
+#include <kdl/chain.hpp>
+#include <kdl/chainfksolverpos_recursive.hpp>
 
 namespace yam_ros2_control {
 
@@ -62,7 +63,12 @@ private:
   std::array<bool,N> motor_enabled_{};
   std::unique_ptr<YAMCanDriver> control_bus_;
   std::unique_ptr<YAMCanRegisterReader> registers_;
-  std::unique_ptr<KDL::ChainDynParam> gravity_solver_;
+  // Keep the chain alive because the FK solver stores a reference to it.
+  // The gravity feedforward uses the derivative of the URDF gravitational
+  // potential rather than ChainDynParam::JntToGravity, which rejected the
+  // physical YAM startup pose on both hardware instances.
+  KDL::Chain gravity_chain_;
+  std::unique_ptr<KDL::ChainFkSolverPos_recursive> gravity_fk_;
   std::string role_, channel_;
   bool initialized_ = false;
   bool active_ = false;
@@ -80,6 +86,7 @@ private:
   void read_encoder_snapshot(bool initial);
   void put_feedback(std::size_t joint, const MotorState &state);
   bool within_limits(const std::array<double,N>& q) const;
+  double gravitational_potential(const KDL::JntArray &q) const;
   std::array<double,N> gravity_torques() const;
   MotorCommand startup_command(std::size_t joint, double measured_motor_position,
                                const std::array<double,N>& gravity) const;

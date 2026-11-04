@@ -8,6 +8,7 @@
 #include <string>
 
 #include <kdl/chain.hpp>
+#include <kdl/frames.hpp>
 #include <kdl/jntarray.hpp>
 #include <kdl/tree.hpp>
 #include <kdl_parser/kdl_parser.hpp>
@@ -82,8 +83,12 @@ hardware_interface::CallbackReturn YAMLiveHardware::on_init(
           !tree.getChain("base", "gripper", chain) || chain.getNrOfJoints() != N) {
         throw std::runtime_error("Cannot build six-joint gravity chain from " + model_file);
       }
-      gravity_solver_ = std::make_unique<KDL::ChainDynParam>(
-          chain, KDL::Vector(0.0, 0.0, -9.81));
+      gravity_chain_ = chain;
+      gravity_fk_ = std::make_unique<KDL::ChainFkSolverPos_recursive>(gravity_chain_);
+      // Reject a broken dynamics model before any actuator is enabled.
+      KDL::JntArray neutral(N);
+      for (std::size_t i = 0; i < N; ++i) neutral(i) = 0.0;
+      (void)gravitational_potential(neutral);
     }
     initialized_ = true;
     RCLCPP_WARN(logger(), "%s on %s initialized. Physical actuation: %s",
@@ -190,18 +195,66 @@ void YAMLiveHardware::put_feedback(std::size_t i, const MotorState &s) {
   velocities_[i] = s.velocity;
 }
 
-std::array<double,YAMLiveHardware::N> YAMLiveHardware::gravity_torques() const {
-  if (!gravity_solver_) throw std::runtime_error("Gravity model unavailable");
-  KDL::JntArray q(N), t(N);
-  for (std::size_t i=0; i<N; ++i) q(i) = positions_[i];
-  if (gravity_solver_->JntToGravity(q,t) < 0) {
-    throw std::runtime_error("KDL JntToGravity failed");
+// The potential includes the mass and center of gravity of each segment in
+// the six-joint base -> gripper chain. The fixed root base has no joint
+// contribution and must not produce a torque about an actuated axis.
+// U(q) = sum_i m_i * g * z_COM_i(q), with gravity along world -Z.
+double YAMLiveHardware::gravitational_potential(const KDL::JntArray &q) const {
+  if (!gravity_fk_ || q.rows() != gravity_chain_.getNrOfJoints()) {
+    throw std::runtime_error("Gravity FK model absent or wrong joint count");
   }
+  constexpr double G = 9.81;
+  double potential = 0.0;
+  for (unsigned int s = 0; s < gravity_chain_.getNrOfSegments(); ++s) {
+    const auto &inertia = gravity_chain_.getSegment(s).getInertia();
+    const double mass = inertia.getMass();
+    if (!std::isfinite(mass) || mass < 0.0) {
+      throw std::runtime_error("Invalid URDF link mass in gravity model");
+    }
+    if (mass == 0.0) continue;
+    KDL::Frame link_pose;
+    const int rc = gravity_fk_->JntToCart(q, link_pose, static_cast<int>(s + 1));
+    if (rc < 0) {
+      throw std::runtime_error("Gravity FK failed at segment " +
+        std::to_string(s+1) + " (KDL code " + std::to_string(rc) + ")");
+    }
+    const double z = (link_pose * inertia.getCOG()).z();
+    if (!std::isfinite(z)) {
+      throw std::runtime_error("Non-finite URDF center-of-mass height");
+    }
+    potential += mass * G * z;
+  }
+  if (!std::isfinite(potential)) {
+    throw std::runtime_error("Non-finite gravitational potential");
+  }
+  return potential;
+}
+
+std::array<double,YAMLiveHardware::N> YAMLiveHardware::gravity_torques() const {
+  if (!gravity_fk_) throw std::runtime_error("Gravity model unavailable");
+  KDL::JntArray q(N);
+  for (std::size_t i = 0; i < N; ++i) {
+    if (!std::isfinite(positions_[i])) {
+      throw std::runtime_error("Non-finite measured joint position " + std::to_string(i+1));
+    }
+    q(i) = positions_[i];
+  }
+
+  // Static feedforward torque is dU/dq, canceling gravity (-dU/dq).
+  // Centered finite differences avoid the ChainDynParam failure seen on
+  // both CAN buses, while preserving the URDF's actual masses and geometry.
+  constexpr double H = 1.0e-5; // rad
   std::array<double,N> output{};
-  for (std::size_t i=0; i<N; ++i) {
-    output[i] = t(i) * gravity_factor_[i];
+  for (std::size_t i = 0; i < N; ++i) {
+    q(i) = positions_[i] + H;
+    const double plus = gravitational_potential(q);
+    q(i) = positions_[i] - H;
+    const double minus = gravitational_potential(q);
+    q(i) = positions_[i];
+    output[i] = (plus - minus) / (2.0 * H) * gravity_factor_[i];
     if (!std::isfinite(output[i]) || std::abs(output[i]) > torque_caps_[i]) {
-      throw std::runtime_error("Gravity torque cap exceeded on joint " + std::to_string(i+1));
+      throw std::runtime_error("Gravity torque invalid/out of bounds on joint " +
+        std::to_string(i + 1) + ": " + std::to_string(output[i]) + " Nm");
     }
   }
   return output;
