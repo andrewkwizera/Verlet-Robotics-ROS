@@ -17,6 +17,7 @@ def assemble(context):
     allow = LaunchConfiguration("allow_actuation").perform(context)
     calibration = LaunchConfiguration("calibration_verified").perform(context)
     estop = LaunchConfiguration("emergency_stop_verified").perform(context)
+    auto_track = LaunchConfiguration("auto_track").perform(context)
     nodes = []
     for role, channel in [("leader", "can0"), ("follower", "can1")]:
         args = ["xacro", xacro, f"role:={role}", f"can_interface:={channel}",
@@ -40,8 +41,13 @@ def assemble(context):
     nodes.append(Node(package="controller_manager", executable="spawner",
                       arguments=["yam_position_controller", "--controller-manager", "/follower/controller_manager"],
                       output="screen"))
+    # The bridge may auto-arm only after BOTH hardware interfaces publish fresh states,
+    # the follower controller subscribes to commands, and the initial poses align.
+    authorized = all(v.lower() in ("true", "1") for v in (allow, calibration, estop))
     nodes.append(Node(package="yam_teleop_cpp", executable="yam_live_bridge",
-                      name="yam_live_bridge", output="screen"))
+                      name="yam_live_bridge", output="screen",
+                      parameters=[{"actuation_authorized": authorized,
+                                   "auto_track": auto_track.lower() in ("true", "1")}]))
     return nodes
 
 
@@ -53,6 +59,8 @@ def generate_launch_description():
                               description="Only set true after verifying joint offsets and axis conventions"),
         DeclareLaunchArgument("emergency_stop_verified", default_value="false",
                               description="Only set true after verifying independent emergency-stop behavior"),
+        DeclareLaunchArgument("auto_track", default_value="false",
+                              description="Automatically arm tracking ONCE after 2 seconds if aligned and safe"),
     ]
     for role in ("leader", "follower"):
         for n in range(1, 7):

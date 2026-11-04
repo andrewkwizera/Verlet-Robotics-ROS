@@ -1,307 +1,430 @@
 #include "yam_ros2_control/yam_live_hardware.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <exception>
 #include <limits>
 #include <stdexcept>
 #include <string>
-#include <kdl_parser/kdl_parser.hpp>
-#include <kdl/tree.hpp>
+
 #include <kdl/chain.hpp>
 #include <kdl/jntarray.hpp>
+#include <kdl/tree.hpp>
+#include <kdl_parser/kdl_parser.hpp>
 #include "pluginlib/class_list_macros.hpp"
 
 namespace yam_ros2_control {
 namespace {
-auto log() { return rclcpp::get_logger("YAMLiveHardware"); }
-bool yes(const std::string &value) { return value == "true" || value == "1"; }
-constexpr double PI = 3.14159265358979323846;
+auto logger() { return rclcpp::get_logger("YAMLiveHardware"); }
+bool yes(const std::string& v) { return v == "true" || v == "1"; }
 constexpr double MOTOR_RANGE = 25.0;
-constexpr double MAX_SAMPLE_DELTA = 0.35; // Fail if reported movement >0.35 rad per 50-Hz cycle.
-constexpr double MAX_CMD_RATE = 0.25;      // Max 0.25 rad/s requested follower motion.
-constexpr double MAX_FOLLOW_ERROR = 0.20;  // Reject large errors rather than jumping to target.
-constexpr double JOINT_SOFT_MARGIN = 0.08;
-constexpr double TORQUE_CAP = 5.0;         // Conservative initial gravity feedforward cap.
+constexpr double MAX_ENCODER_STEP = 0.35;  // rad/servo iteration
+constexpr double MAX_FOLLOW_VELOCITY = 0.25; // rad/s; deliberately slower than I2RT
+constexpr double MAX_FOLLOW_ERROR = 0.20;
+constexpr double JOINT_MARGIN = 0.08;
+constexpr double MAX_STARTUP_SENSOR_DISAGREEMENT = 0.15; // xout vs MIT feedback
 constexpr auto MAX_CYCLE_GAP = std::chrono::milliseconds(150);
+
+double nearest_wrap_delta(double current, double previous) {
+  return std::remainder(current - previous, MOTOR_RANGE);
+}
 }
 
-hardware_interface::CallbackReturn YAMLiveHardware::on_init(const hardware_interface::HardwareInfo &info)
-{
-  if (hardware_interface::SystemInterface::on_init(info) != hardware_interface::CallbackReturn::SUCCESS)
+hardware_interface::CallbackReturn YAMLiveHardware::on_init(
+    const hardware_interface::HardwareInfo &info) {
+  if (hardware_interface::SystemInterface::on_init(info) !=
+      hardware_interface::CallbackReturn::SUCCESS) {
     return hardware_interface::CallbackReturn::ERROR;
+  }
   try {
-    if (info_.joints.size() != N) throw std::runtime_error("Expected six joints");
+    if (info_.joints.size() != N) throw std::runtime_error("Expected exactly 6 arm joints");
     role_ = info_.hardware_parameters.at("role");
     channel_ = info_.hardware_parameters.at("can_interface");
     if (!((role_ == "leader" && channel_ == "can0") ||
-          (role_ == "follower" && channel_ == "can1")))
-      throw std::runtime_error("Unexpected role/CAN mapping");
+          (role_ == "follower" && channel_ == "can1"))) {
+      throw std::runtime_error("Unexpected role/CAN mapping; refusing to drive other bus");
+    }
     allow_actuation_ = yes(info_.hardware_parameters.at("allow_actuation"));
     calibrated_ = yes(info_.hardware_parameters.at("calibration_verified"));
     estop_confirmed_ = yes(info_.hardware_parameters.at("emergency_stop_verified"));
-    for (std::size_t i=0; i<N; ++i) {
+    for (std::size_t i = 0; i < N; ++i) {
       const auto &j = info_.joints[i];
-      if (j.name != "joint_" + std::to_string(i+1) ||
-          j.command_interfaces.size()!=1 || j.command_interfaces[0].name!="position" ||
-          j.state_interfaces.size()!=2)
-        throw std::runtime_error("Incorrect joint interface " + j.name);
-      bool q=false,dq=false;
-      for (const auto &s: j.state_interfaces) {
-        q |= s.name=="position"; dq |= s.name=="velocity";
+      if (j.name != "joint_" + std::to_string(i + 1) ||
+          j.command_interfaces.size() != 1 || j.command_interfaces[0].name != "position" ||
+          j.state_interfaces.size() != 2) {
+        throw std::runtime_error("Wrong joint interface: " + j.name);
       }
-      if (!q || !dq) throw std::runtime_error("Missing state interfaces");
-      offsets_[i] = std::stod(info_.hardware_parameters.at("offset_"+std::to_string(i+1)));
-      if (!std::isfinite(offsets_[i])) throw std::runtime_error("Non-finite joint offset");
+      bool position = false, velocity = false;
+      for (const auto &s : j.state_interfaces) {
+        position |= s.name == "position";
+        velocity |= s.name == "velocity";
+      }
+      if (!position || !velocity) throw std::runtime_error("Missing joint state interface");
+      offsets_[i] = std::stod(info_.hardware_parameters.at("offset_" + std::to_string(i+1)));
+      if (!std::isfinite(offsets_[i])) throw std::runtime_error("Non-finite motor offset");
     }
-    registers_ = std::make_unique<YAMCanRegisterReader>(channel_);
     positions_.fill(std::numeric_limits<double>::quiet_NaN());
-    velocities_.fill(0);
     commands_.fill(std::numeric_limits<double>::quiet_NaN());
+    velocities_.fill(0.0);
     unwrapped_ready_.fill(false);
-    if (role_ == "leader" && allow_actuation_) {
-      const std::string model_file = info_.hardware_parameters.at("model_file");
+    motor_enabled_.fill(false);
+    registers_ = std::make_unique<YAMCanRegisterReader>(channel_);
+
+    if (allow_actuation_) {
+      if (!calibrated_ || !estop_confirmed_) {
+        throw std::runtime_error(
+          "Actuation refused: offsets/axes AND independent E-stop must be verified first");
+      }
+      const auto model_file = info_.hardware_parameters.at("model_file");
       KDL::Tree tree;
-      if (!kdl_parser::treeFromFile(model_file, tree))
-        throw std::runtime_error("Cannot parse dynamics URDF: " + model_file);
       KDL::Chain chain;
-      if (!tree.getChain("base", "gripper", chain) || chain.getNrOfJoints()!=N)
-        throw std::runtime_error("Dynamics chain base -> gripper must have 6 joints");
-      gravity_solver_ = std::make_unique<KDL::ChainDynParam>(chain,KDL::Vector(0,0,-9.81));
+      if (!kdl_parser::treeFromFile(model_file, tree) ||
+          !tree.getChain("base", "gripper", chain) || chain.getNrOfJoints() != N) {
+        throw std::runtime_error("Cannot build six-joint gravity chain from " + model_file);
+      }
+      gravity_solver_ = std::make_unique<KDL::ChainDynParam>(
+          chain, KDL::Vector(0.0, 0.0, -9.81));
     }
-    initialized_=true;
-    RCLCPP_WARN(log(), "%s %s initialized; allow_actuation=%s; NO motors enabled yet",
-      role_.c_str(),channel_.c_str(),allow_actuation_?"true":"false");
+    initialized_ = true;
+    RCLCPP_WARN(logger(), "%s on %s initialized. Physical actuation: %s",
+      role_.c_str(), channel_.c_str(), allow_actuation_ ? "PERMITTED" : "BLOCKED");
     return hardware_interface::CallbackReturn::SUCCESS;
-  } catch (const std::exception &e) {
-    RCLCPP_ERROR(log(), "init failed: %s", e.what());
+  } catch (const std::exception& e) {
+    RCLCPP_ERROR(logger(), "Initialization failed: %s", e.what());
     return hardware_interface::CallbackReturn::ERROR;
   }
 }
 
-std::vector<hardware_interface::StateInterface> YAMLiveHardware::export_state_interfaces()
-{
-  std::vector<hardware_interface::StateInterface> v;
-  for(std::size_t i=0;i<N;++i) {
-    v.emplace_back(info_.joints[i].name,"position",&positions_[i]);
-    v.emplace_back(info_.joints[i].name,"velocity",&velocities_[i]);
+std::vector<hardware_interface::StateInterface> YAMLiveHardware::export_state_interfaces() {
+  std::vector<hardware_interface::StateInterface> states;
+  for (std::size_t i = 0; i < N; ++i) {
+    states.emplace_back(info_.joints[i].name, "position", &positions_[i]);
+    states.emplace_back(info_.joints[i].name, "velocity", &velocities_[i]);
   }
-  return v;
-}
-std::vector<hardware_interface::CommandInterface> YAMLiveHardware::export_command_interfaces()
-{
-  std::vector<hardware_interface::CommandInterface> v;
-  for(std::size_t i=0;i<N;++i) v.emplace_back(info_.joints[i].name,"position",&commands_[i]);
-  return v;
+  return states;
 }
 
-void YAMLiveHardware::verify_registers()
-{
-  for(std::size_t i=0;i<N;++i) {
-    const uint8_t id=static_cast<uint8_t>(i+1);
-    const double gear = registers_->read_float_register(id,20);
-    const double pmax = registers_->read_float_register(id,21);
-    const double vmax = registers_->read_float_register(id,22);
-    const double tmax = registers_->read_float_register(id,23);
-    const uint32_t mode=registers_->read_uint_register(id,10);
-    const uint32_t timeout=registers_->read_uint_register(id,9);
-    const double expect_gear=i<3?40.0:10.0;
-    const double expect_v=i<3?10.0:30.0;
-    const double expect_t=i<3?28.0:10.0;
-    const auto eq=[](double a,double b){return std::isfinite(a)&&std::abs(a-b)<1e-5;};
-    if (!eq(gear,expect_gear) || !eq(pmax,12.5) || !eq(vmax,expect_v) ||
-        !eq(tmax,expect_t) || mode!=1 || timeout==0)
-      throw std::runtime_error("Motor " + std::to_string(id) + " config mismatch or no watchdog");
-    if (timeout > 1000)
-      RCLCPP_WARN(log(), "%s motor %u firmware timeout %u ms is not a fast E-stop",
-        channel_.c_str(),id,timeout);
+std::vector<hardware_interface::CommandInterface> YAMLiveHardware::export_command_interfaces() {
+  std::vector<hardware_interface::CommandInterface> cmds;
+  for (std::size_t i = 0; i < N; ++i) {
+    cmds.emplace_back(info_.joints[i].name, "position", &commands_[i]);
+  }
+  return cmds;
+}
+
+void YAMLiveHardware::verify_registers() {
+  for (std::size_t i = 0; i < N; ++i) {
+    const auto id = static_cast<uint8_t>(i + 1);
+    const double gr = registers_->read_float_register(id, 20);
+    const double pmax = registers_->read_float_register(id, 21);
+    const double vmax = registers_->read_float_register(id, 22);
+    const double tmax = registers_->read_float_register(id, 23);
+    const auto mode = registers_->read_uint_register(id, 10);
+    const auto timeout = registers_->read_uint_register(id, 9);
+    const double expected_v = i < 3 ? 10.0 : 30.0;
+    const double expected_t = i < 3 ? 28.0 : 10.0;
+    auto same = [](double a, double b) { return std::isfinite(a) && std::abs(a-b) < 1e-4; };
+    if (!same(gr, i < 3 ? 40.0 : 10.0) || !same(pmax, 12.5) ||
+        !same(vmax, expected_v) || !same(tmax, expected_t) || mode != 1 || timeout == 0) {
+      throw std::runtime_error("Motor " + std::to_string(id) + " register mismatch");
+    }
+    if (timeout > 1000) {
+      RCLCPP_WARN(logger(), "%s motor %u timeout %u ms: NOT an emergency stop",
+        channel_.c_str(), id, timeout);
+    }
   }
 }
 
-bool YAMLiveHardware::read_raw_positions()
-{
+void YAMLiveHardware::read_encoder_snapshot(bool initial) {
+  const auto now = std::chrono::steady_clock::now();
+  const double dt = initial ? 0.0 :
+    std::chrono::duration<double>(now - last_raw_read_).count();
   std::array<double,N> q{};
-  for(std::size_t i=0;i<N;++i) {
-    q[i] = static_cast<double>(registers_->read_float_register(static_cast<uint8_t>(i+1),81));
-    if (!std::isfinite(q[i])) return false;
+  for (std::size_t i=0; i<N; ++i) {
+    q[i] = static_cast<double>(registers_->read_float_register(
+      static_cast<uint8_t>(i + 1), 81)); // xout: output-shaft position
   }
-  for(std::size_t i=0;i<N;++i) {
-    raw_last_[i]=q[i]; raw_unwrapped_[i]=q[i]; unwrapped_ready_[i]=true;
-    positions_[i]=q[i]-offsets_[i]; velocities_[i]=0;
+  for (std::size_t i=0; i<N; ++i) {
+    if (initial || !unwrapped_ready_[i]) {
+      raw_unwrapped_[i] = q[i];
+      unwrapped_ready_[i] = true;
+      velocities_[i] = 0.0;
+    } else {
+      const double delta = nearest_wrap_delta(q[i], raw_last_[i]);
+      if (!std::isfinite(delta) || std::abs(delta) > MAX_ENCODER_STEP) {
+        throw std::runtime_error("Encoder jump on joint " + std::to_string(i+1));
+      }
+      raw_unwrapped_[i] += delta;
+      velocities_[i] = dt > 0.0 ? delta/dt : 0.0;
+    }
+    raw_last_[i] = q[i];
+    positions_[i] = raw_unwrapped_[i] - offsets_[i];
+  }
+  last_raw_read_ = now;
+}
+
+bool YAMLiveHardware::within_limits(const std::array<double,N> &q) const {
+  for (std::size_t i=0; i<N; ++i) {
+    if (!std::isfinite(q[i]) || q[i] < lower_[i] - JOINT_MARGIN ||
+        q[i] > upper_[i] + JOINT_MARGIN) return false;
   }
   return true;
 }
 
-bool YAMLiveHardware::within_limits(const std::array<double,N> &q) const
-{
-  for(std::size_t i=0;i<N;++i) {
-    if (!std::isfinite(q[i]) || q[i]<lower_[i]-JOINT_SOFT_MARGIN ||
-       q[i]>upper_[i]+JOINT_SOFT_MARGIN) return false;
+void YAMLiveHardware::put_feedback(std::size_t i, const MotorState &s) {
+  if (s.error_code != 1 || !std::isfinite(s.position) ||
+      !std::isfinite(s.velocity) || !std::isfinite(s.torque)) {
+    throw std::runtime_error("Motor feedback invalid/fault on joint " + std::to_string(i+1));
   }
-  return true;
-}
-
-void YAMLiveHardware::put_feedback(std::size_t i, const MotorState &s)
-{
-  if (s.error_code!=1 || !std::isfinite(s.position)||!std::isfinite(s.velocity))
-    throw std::runtime_error("Motor feedback invalid or fault on joint " + std::to_string(i+1));
   if (!unwrapped_ready_[i]) {
-    raw_unwrapped_[i]=s.position;
-    unwrapped_ready_[i]=true;
-  } else {
-    double delta=s.position-raw_last_[i];
-    if(delta> MOTOR_RANGE/2) delta-=MOTOR_RANGE;
-    if(delta<-MOTOR_RANGE/2) delta+=MOTOR_RANGE;
-    if(std::abs(delta)>MAX_SAMPLE_DELTA)
-      throw std::runtime_error("Implausible joint position change " + std::to_string(i+1));
-    raw_unwrapped_[i]+=delta;
+    throw std::runtime_error("Cannot use MIT feedback without encoder initialization");
   }
-  raw_last_[i]=s.position;
-  positions_[i]=raw_unwrapped_[i]-offsets_[i];
-  velocities_[i]=s.velocity;
+  const double delta = nearest_wrap_delta(s.position, raw_last_[i]);
+  if (!std::isfinite(delta) || std::abs(delta) > MAX_ENCODER_STEP) {
+    throw std::runtime_error("MIT feedback/encoder discontinuity on joint " +
+      std::to_string(i+1) + "; check motor zero and register 81 units");
+  }
+  raw_unwrapped_[i] += delta;
+  raw_last_[i] = s.position;
+  positions_[i] = raw_unwrapped_[i] - offsets_[i];
+  velocities_[i] = s.velocity;
 }
 
-std::array<double,YAMLiveHardware::N> YAMLiveHardware::gravity_torques() const
-{
-  if (!gravity_solver_) throw std::runtime_error("Missing KDL gravity model");
+std::array<double,YAMLiveHardware::N> YAMLiveHardware::gravity_torques() const {
+  if (!gravity_solver_) throw std::runtime_error("Gravity model unavailable");
   KDL::JntArray q(N), t(N);
-  for(std::size_t i=0;i<N;++i) q(i)=positions_[i];
-  if(gravity_solver_->JntToGravity(q,t)<0)
-    throw std::runtime_error("KDL gravity solver failed");
-  std::array<double,N> out{};
-  for(std::size_t i=0;i<N;++i) {
-    double value=t(i)*gravity_factor_[i];
-    if(!std::isfinite(value)||std::abs(value)>TORQUE_CAP)
-      throw std::runtime_error("Gravity torque outside commissioned cap at joint " + std::to_string(i+1));
-    out[i]=value;
+  for (std::size_t i=0; i<N; ++i) q(i) = positions_[i];
+  if (gravity_solver_->JntToGravity(q,t) < 0) {
+    throw std::runtime_error("KDL JntToGravity failed");
   }
-  return out;
+  std::array<double,N> output{};
+  for (std::size_t i=0; i<N; ++i) {
+    output[i] = t(i) * gravity_factor_[i];
+    if (!std::isfinite(output[i]) || std::abs(output[i]) > torque_caps_[i]) {
+      throw std::runtime_error("Gravity torque cap exceeded on joint " + std::to_string(i+1));
+    }
+  }
+  return output;
 }
 
-void YAMLiveHardware::turn_off_best_effort() noexcept
-{
-  if (!motors_enabled_ || !control_bus_) return;
-  RCLCPP_ERROR(log(), "%s motor disable requested; robot MUST be mechanically supported", role_.c_str());
-  for(std::size_t i=0;i<N;++i) {
-    try { control_bus_->disable_motor(static_cast<uint32_t>(i+1)); }
-    catch(const std::exception &e) { RCLCPP_ERROR(log(),"Motor disable failed: %s",e.what()); }
-  }
-  motors_enabled_=false;
+MotorCommand YAMLiveHardware::startup_command(
+    std::size_t i, double current_motor_position,
+    const std::array<double,N> &gravity) const {
+  MotorCommand cmd;
+  cmd.position = current_motor_position;
+  cmd.velocity = 0.0;
+  cmd.kp = role_ == "follower" ? kp_[i] : 0.0;
+  cmd.kd = role_ == "follower" ? kd_[i] : gravity_kd_[i];
+  cmd.torque = gravity[i];
+  return cmd;
 }
 
-hardware_interface::CallbackReturn YAMLiveHardware::on_activate(const rclcpp_lifecycle::State &)
-{
-  if (!initialized_||faulted_) return hardware_interface::CallbackReturn::ERROR;
+void YAMLiveHardware::turn_off_best_effort() noexcept {
+  if (!control_bus_) return;
+  // DM disable eliminates commanded torque, but does NOT mechanically arrest the arm.
+  // The cell must provide physical support and an independent stop for all commissioning.
+  for (std::size_t i=0; i<N; ++i) {
+    if (!motor_enabled_[i]) continue;
+    try {
+      control_bus_->disable_motor(static_cast<uint32_t>(i+1));
+    } catch (const std::exception &e) {
+      RCLCPP_ERROR(logger(), "%s motor-off joint %zu failed: %s",
+        role_.c_str(), i+1, e.what());
+    }
+    motor_enabled_[i] = false;
+  }
+}
+
+hardware_interface::CallbackReturn YAMLiveHardware::on_activate(
+    const rclcpp_lifecycle::State &) {
+  if (!initialized_ || faulted_) return hardware_interface::CallbackReturn::ERROR;
   try {
     verify_registers();
-    if (!read_raw_positions() || !within_limits(positions_))
-      throw std::runtime_error("Raw joint poses outside commissioned limits; verify offsets");
-    commands_=positions_;
+    read_encoder_snapshot(true);
+    if (!within_limits(positions_)) {
+      throw std::runtime_error("Joint angles out of URDF bounds; verify absolute zero offsets");
+    }
+    commands_ = positions_; // hold ACTUAL measured position, not arbitrary zero
+    startup_hold_ = positions_;
+    follower_command_seen_ = false;
     if (!allow_actuation_) {
-      active_=true;
-      RCLCPP_WARN(log(), "%s active in READ-ONLY mode (enable_actuation=false)",role_.c_str());
+      active_ = true;
+      RCLCPP_WARN(logger(), "%s READ-ONLY on %s. No MIT motor commands sent",
+        role_.c_str(), channel_.c_str());
       return hardware_interface::CallbackReturn::SUCCESS;
     }
-    if (!calibrated_ || !estop_confirmed_)
-      throw std::runtime_error("Actuation refused: calibration_verified and emergency_stop_verified must both be true");
-    if (role_=="leader") (void)gravity_torques();
-    control_bus_=std::make_unique<YAMCanDriver>(channel_);
-    motors_enabled_=true; // Ensure best-effort disarm even if enabling motor 2-6 fails.
-    unwrapped_ready_.fill(false); // Start unwrap from MIT enable replies, not xout register.
-    for(std::size_t i=0;i<N;++i) {
-      const auto state=control_bus_->enable_motor(i+1,0x11+i,types_[i],20);
-      put_feedback(i,state);
-      // The leader is unsupported in torque control until gravity updates; support both arms.
-      MotorCommand startup{};
-      startup.position=state.position;
-      startup.velocity=0;
-      startup.kp=role_=="follower"?kp_[i]:0.0;
-      startup.kd=role_=="follower"?kd_[i]:leader_kd_[i];
-      startup.torque=0;
-      (void)control_bus_->exchange(i+1,0x11+i,types_[i],startup,10);
+    // Compute every feedforward torque BEFORE any motor enable command.
+    // Both follower HOLD and leader FLOAT include gravity compensation.
+    auto gravity = gravity_torques();
+    control_bus_ = std::make_unique<YAMCanDriver>(channel_);
+    for (std::size_t i=0; i<N; ++i) {
+      const auto id = static_cast<uint32_t>(i + 1);
+      const auto response_id = static_cast<uint32_t>(0x11 + i);
+      // Set cleanup flag BEFORE transmission: a CAN reply timeout does not
+      // prove that the motor ignored the enable frame.
+      motor_enabled_[i] = true;
+      const auto enabled = control_bus_->enable_motor(id, response_id, types_[i], 20);
+      // This reconciles the output-shaft register and MIT's wrapping register.
+      if (std::abs(nearest_wrap_delta(enabled.position, raw_last_[i])) >
+          MAX_STARTUP_SENSOR_DISAGREEMENT) {
+        throw std::runtime_error("Register/MIT startup pose mismatch at joint " +
+          std::to_string(i+1));
+      }
+      put_feedback(i, enabled);
+      gravity = gravity_torques();
+      auto cmd = startup_command(i, enabled.position, gravity);
+      auto feedback = control_bus_->exchange(id, response_id, types_[i], cmd, 10);
+      put_feedback(i, feedback);
     }
-    if (!within_limits(positions_)) throw std::runtime_error("Measured enabled pose violates joint limits");
-    commands_=positions_;
-    last_cycle_=std::chrono::steady_clock::now();
-    active_=true;
-    RCLCPP_WARN(log(), "LIVE %s ACTIVE on %s. Manual support and independent E-stop REQUIRED",
-      role_.c_str(),channel_.c_str());
+    if (!within_limits(positions_)) {
+      throw std::runtime_error("Post-enable measured joint pose outside bounds");
+    }
+    commands_ = positions_;
+    startup_hold_ = positions_;
+    follower_command_seen_ = false;
+    last_cycle_ = std::chrono::steady_clock::now();
+    active_ = true;
+    RCLCPP_WARN(logger(), "%s LIVE on %s. Physical support and independent E-stop mandatory",
+      role_.c_str(), channel_.c_str());
     return hardware_interface::CallbackReturn::SUCCESS;
-  } catch(const std::exception &e) {
-    RCLCPP_ERROR(log(),"LIVE activation failed: %s",e.what());
-    faulted_=true;active_=false;
+  } catch (const std::exception &e) {
+    RCLCPP_ERROR(logger(), "%s ACTUATION FAILURE: %s", role_.c_str(), e.what());
+    faulted_ = true;
+    active_ = false;
     turn_off_best_effort();
     return hardware_interface::CallbackReturn::ERROR;
   }
 }
 
-hardware_interface::CallbackReturn YAMLiveHardware::on_deactivate(const rclcpp_lifecycle::State &)
-{
-  active_=false;
+hardware_interface::CallbackReturn YAMLiveHardware::on_deactivate(
+    const rclcpp_lifecycle::State &) {
+  active_ = false;
   turn_off_best_effort();
   return hardware_interface::CallbackReturn::SUCCESS;
 }
+
 YAMLiveHardware::~YAMLiveHardware() { turn_off_best_effort(); }
 
-hardware_interface::return_type YAMLiveHardware::read(const rclcpp::Time &,const rclcpp::Duration &)
-{
-  if(!active_||faulted_) return hardware_interface::return_type::ERROR;
-  if(!allow_actuation_) {
-    try {
-      if(!read_raw_positions()) throw std::runtime_error("No motor register feedback");
-      return hardware_interface::return_type::OK;
-    } catch(const std::exception &e) {
-      RCLCPP_ERROR(log(),"Read-only feedback failed: %s",e.what());
-      faulted_=true;
-      return hardware_interface::return_type::ERROR;
-    }
+hardware_interface::return_type YAMLiveHardware::perform_command_mode_switch(
+    const std::vector<std::string> &start_interfaces,
+    const std::vector<std::string> &stop_interfaces) {
+  if (role_ != "follower") return hardware_interface::return_type::OK;
+  const std::string first_joint = "joint_1/position";
+  if (std::find(stop_interfaces.begin(), stop_interfaces.end(), first_joint) !=
+      stop_interfaces.end()) {
+    follower_controller_claimed_ = false;
+    follower_command_seen_ = false;
+    if (active_) startup_hold_ = positions_;
   }
-  // MIT mode feedback is decoded in write() immediately after each command.
+  if (std::find(start_interfaces.begin(), start_interfaces.end(), first_joint) !=
+      start_interfaces.end()) {
+    follower_controller_claimed_ = true;
+    follower_command_seen_ = false;
+    follower_command_ready_at_ = std::chrono::steady_clock::now() +
+      std::chrono::milliseconds(300);
+    RCLCPP_INFO(logger(), "Follower controller claimed position interfaces; startup hold continues for 300 ms");
+  }
   return hardware_interface::return_type::OK;
 }
 
-hardware_interface::return_type YAMLiveHardware::write(const rclcpp::Time &, const rclcpp::Duration &period)
-{
-  if(!active_||faulted_) return hardware_interface::return_type::ERROR;
-  if(!allow_actuation_) return hardware_interface::return_type::OK;
-  try {
-    const auto now=std::chrono::steady_clock::now();
-    if(now-last_cycle_>MAX_CYCLE_GAP) throw std::runtime_error("Controller manager scheduling watchdog expired");
-    last_cycle_=now;
-    const double dt=period.seconds();
-    if (!std::isfinite(dt)||dt<=0||dt>0.15) throw std::runtime_error("Invalid control period");
-    if(!within_limits(positions_)) throw std::runtime_error("Measured position outside joint limits");
-    std::array<MotorCommand,N> outputs{};
-    if(role_=="leader") {
-      const auto torques=gravity_torques();
-      for(std::size_t i=0;i<N;++i) {
-        outputs[i]={raw_last_[i],0,0,leader_kd_[i],torques[i]};
-      }
-    } else {
-      if(!within_limits(commands_)) throw std::runtime_error("Follower target outside joint limits");
-      for(std::size_t i=0;i<N;++i) {
-        const double error=commands_[i]-positions_[i];
-        if(std::abs(error)>MAX_FOLLOW_ERROR)
-          throw std::runtime_error("Follower tracking error exceeded limit at joint " + std::to_string(i+1));
-        const double target=positions_[i]+std::clamp(error,-MAX_CMD_RATE*dt,MAX_CMD_RATE*dt);
-        // MIT position must remain in [-12.5,12.5] (only the arm-space angle is unwrapped).
-        double motor_target = target + offsets_[i];
-        motor_target = std::remainder(motor_target, MOTOR_RANGE);
-        outputs[i]={motor_target,0,kp_[i],kd_[i],0};
-      }
-    }
-    for(std::size_t i=0;i<N;++i) (void)YAMCanDriver::encode_mit(outputs[i],types_[i]);
-    for(std::size_t i=0;i<N;++i) {
-      const MotorState feedback=control_bus_->exchange(i+1,0x11+i,types_[i],outputs[i],8);
-      put_feedback(i,feedback);
-    }
-    if(!within_limits(positions_)) throw std::runtime_error("Post-command joint limit violation");
+hardware_interface::return_type YAMLiveHardware::read(
+    const rclcpp::Time &, const rclcpp::Duration &) {
+  if (!active_ || faulted_) return hardware_interface::return_type::ERROR;
+  if (allow_actuation_) {
+    // In live mode, the read() state is the fresh MIT feedback received in write().
     return hardware_interface::return_type::OK;
-  } catch(const std::exception &e) {
-    RCLCPP_ERROR(log(),"LIVE CONTROL FAULT (%s): %s",role_.c_str(),e.what());
-    faulted_=true;active_=false;
-    turn_off_best_effort(); // Unsupported arms may fall; mechanical support is mandatory.
+  }
+  try {
+    read_encoder_snapshot(false);
+    return hardware_interface::return_type::OK;
+  } catch (const std::exception &e) {
+    RCLCPP_ERROR(logger(), "Read-only CAN feedback fault: %s", e.what());
+    faulted_ = true;
     return hardware_interface::return_type::ERROR;
   }
 }
-} // namespace yam_ros2_control
-PLUGINLIB_EXPORT_CLASS(yam_ros2_control::YAMLiveHardware,hardware_interface::SystemInterface)
+
+hardware_interface::return_type YAMLiveHardware::write(
+    const rclcpp::Time &, const rclcpp::Duration &period) {
+  if (!active_ || faulted_) return hardware_interface::return_type::ERROR;
+  if (!allow_actuation_) return hardware_interface::return_type::OK;
+  try {
+    auto now = std::chrono::steady_clock::now();
+    if (now - last_cycle_ > MAX_CYCLE_GAP)
+      throw std::runtime_error("Servo scheduler stalled >150 ms");
+    last_cycle_ = now;
+    const double dt = period.seconds();
+    if (!std::isfinite(dt) || dt <= 0.0 || dt > 0.15)
+      throw std::runtime_error("Invalid servo cycle duration");
+    if (!within_limits(positions_))
+      throw std::runtime_error("Measured joint outside URDF safety limits");
+
+    auto gravity = gravity_torques();
+    std::array<MotorCommand,N> outputs{};
+    if (role_ == "leader") {
+      for (std::size_t i=0; i<N; ++i) {
+        outputs[i] = startup_command(i, raw_last_[i], gravity);
+      }
+    } else {
+      // JointGroupPositionController may not have received any ROS command
+      // immediately after it activates. Reject its uninitialized/default
+      // values until a complete command matches the captured startup pose.
+      // This prevents a controller startup from commanding an all-zero pose.
+      if (!follower_command_seen_) {
+        bool aligned = follower_controller_claimed_ &&
+          std::chrono::steady_clock::now() >= follower_command_ready_at_ &&
+          within_limits(commands_);
+        if (aligned) {
+          for (std::size_t i=0; i<N; ++i) {
+            if (std::abs(commands_[i] - startup_hold_[i]) > 0.10) {
+              aligned = false;
+            }
+          }
+        }
+        if (aligned) {
+          follower_command_seen_ = true;
+          RCLCPP_INFO(logger(), "Follower accepted aligned ROS position-controller commands");
+        }
+      }
+      if (follower_command_seen_ && !within_limits(commands_))
+        throw std::runtime_error("Follower commanded target outside joint limits");
+      const auto &requested = follower_command_seen_ ? commands_ : startup_hold_;
+      for (std::size_t i=0; i<N; ++i) {
+        const double error = requested[i] - positions_[i];
+        if (std::abs(error) > MAX_FOLLOW_ERROR)
+          throw std::runtime_error("Follower position error >0.20 rad on joint " +
+            std::to_string(i+1));
+        const double limited_target = positions_[i] + std::clamp(
+          error, -MAX_FOLLOW_VELOCITY * dt, MAX_FOLLOW_VELOCITY * dt);
+        const double absolute_motor_target = limited_target + offsets_[i];
+        outputs[i] = {
+          std::remainder(absolute_motor_target, MOTOR_RANGE), 0.0,
+          kp_[i], kd_[i], gravity[i]};
+      }
+    }
+    // Encode all six before sending ANY command. A bad command cannot
+    // cause half a servo update to go out before throwing.
+    for (std::size_t i=0; i<N; ++i) {
+      (void)YAMCanDriver::encode_mit(outputs[i], types_[i]);
+    }
+    for (std::size_t i=0; i<N; ++i) {
+      const auto state = control_bus_->exchange(
+        static_cast<uint32_t>(i+1), static_cast<uint32_t>(0x11+i),
+        types_[i], outputs[i], 8);
+      put_feedback(i, state);
+    }
+    if (!within_limits(positions_))
+      throw std::runtime_error("Feedback exceeded URDF joint limits");
+    return hardware_interface::return_type::OK;
+  } catch (const std::exception &e) {
+    RCLCPP_ERROR(logger(), "LIVE %s CONTROL FAULT: %s", role_.c_str(), e.what());
+    faulted_ = true;
+    active_ = false;
+    // Disabled motors do not retain holding torque. External support is mandatory.
+    turn_off_best_effort();
+    return hardware_interface::return_type::ERROR;
+  }
+}
+}  // namespace yam_ros2_control
+
+PLUGINLIB_EXPORT_CLASS(yam_ros2_control::YAMLiveHardware, hardware_interface::SystemInterface)

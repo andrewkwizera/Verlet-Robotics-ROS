@@ -1,132 +1,171 @@
-# Physical YAM → YAM teleoperation with ROS 2 Jazzy (C++)
+# Physical YAM leader–follower teleoperation — C++ ROS 2 Jazzy
 
-This patch implements a **separate native-C++ `ros2_control` path** for two physical six-axis YAM Standard arms:
+This patch **modifies the existing Git repository**. It does not replace the repository,
+run I2RT at runtime, or operate synthetic leader joint states.
 
-- **Leader**, `can0`: MIT commands, KDL-based gravity feedforward from the supplied YAM V1 URDF; operator manually moves the arm.
-- **Follower**, `can1`: MIT position control using the existing YAM PD gains; target comes from a ROS 2 position controller.
-- **ROS 2 connection**: `/leader/joint_states` → `yam_live_bridge` → `/follower/yam_position_controller/commands`.
-- **Enable tracking**: `/yam_teleop/enable_tracking` (`std_srvs/srv/SetBool`). Tracking starts **disabled**.
-- **Hardware power-on interlocks**: `allow_actuation`, `calibration_verified`, and `emergency_stop_verified` launch arguments, each default `false`.
+## Architecture
 
-The existing `yam_physical_follower.launch.py` and `YAMPhysicalHardware` read-only path are **preserved**. The old `yam_teleop.launch.py` still launches the synthetic leader; **do not use it for physical teleoperation**.
-
-## Important: status and limitations
-
-The code was integrated from the supplied 2026-11-03 project archive and its CAN register protocol was checked against the motor results already obtained. **ROS 2 Jazzy is not installed in the environment where the patch was prepared, so the new package has NOT been compiled or run against either physical arm.** Source/XML/Python parsing checks do not replace that validation.
-
-This is an **implementation to commission**, not a certified safety controller. In particular:
-
-- Motors and arm links can cause injury. **Both arms require mechanical support**, accessible and independently verified emergency-stop hardware, a clear operating envelope, and a second person during first physical actuation.
-- The firmware motor timeout observed on both buses was **8,000 ms**. Loss of the ROS 2 process or USB-CAN can therefore leave torque applied for seconds; a motor disable can instead cause the arm to drop. This is **not an adequate independent safety function**.
-- The bridge emits a measured-pose hold if it detects stale ROS messages. If the **bridge process itself crashes**, the standard position controller may retain its last command. An external safety relay or validated hardware watchdog is required for unattended motion.
-- **Gripper motor ID 7 is not controlled.** The six shoulder-to-wrist joints are in scope.
-- **Joint offsets are not established by the files in this archive.** Xacro defaults of 0.0 are placeholders and must be verified against actual physical joint coordinates. Do not treat the prior raw `xout` telemetry as proof of zero calibration.
-- KDL gravity compensation uses the supplied YAM URDF chain `base` → `gripper` and factors `[1,1.1,1.1,1.2,1,1]`. It is not a numerical match test against I2RT's MuJoCo gravity calculation. End-effector hardware, arm mounting, axis direction and torque signs must be verified under mechanical support.
-- Control is at 50 Hz for initial bring-up; no real-time scheduling or latency performance is guaranteed. Motor limits, 0.25 rad/s command ramp, 0.20 rad tracking error, and 5 N·m torque cap are conservative *engineering choices*, **not verified safe operating limits**.
-
-## 1. Install changed source files
-
-Copy the patch ZIP to the NUC. In the workspace, stop **all** ROS 2 controller and I2RT processes using `can0` or `can1` first.
-
-```bash
-cd ~/yam_ros2_ws
-cp -a src "src.backup.$(date +%Y%m%d-%H%M%S)"
-unzip -o ~/Downloads/YAM-ROS2-Live-Teleop-Patch.zip
+```
+physical YAM leader, can0 (6 DM MIT motors)
+   -> yam_ros2_control/YAMLiveHardware (KDL gravity compensation)
+   -> /leader/joint_states
+   -> C++ yam_live_bridge (alignment gate, capped target rate, lost-stream disarm)
+   -> /follower/yam_position_controller/commands
+   -> ROS 2 JointGroupPositionController
+   -> yam_ros2_control/YAMLiveHardware (position hold + KDL gravity feedforward)
+   -> physical follower YAM, can1 (6 DM MIT motors)
 ```
 
-If the patch ZIP is in a different directory, change only the ZIP path. `unzip` overlays **complete replacement files** under `src/`; it does not delete your other packages or meshes.
+Both robots have independent `ros2_control` controller managers. Their joint state
+broadcasters are loaded automatically. The follower position controller is loaded
+automatically. The bridge automatically starts in **tracking disabled** mode.
 
-## 2. Build
+### What changed
 
-Use a fresh terminal that has not already sourced an old copy of the workspace:
+* Physical plugin computes gravity torques for **both** arms from the installed YAM
+  URDF before enabling any motor. The leader floats using zero MIT position gain,
+  factory gravity damping and gravity feedforward. The follower holds its **measured**
+  initial joint positions with MIT PD and gravity feedforward.
+* MIT feedback and the read-only motor `xout` register are reconciled at startup;
+  25-rad position wrapping is handled during operation; encoder disagreement is
+  faulted rather than silently accepted.
+* Follower tracking is constrained to 0.20 rad/s at the ROS bridge and 0.25 rad/s
+  at the motor interface; tracking errors or large separation disarm the bridge.
+* Uncommanded follower drift during idle is avoided by **latching** the hold target
+  instead of repeatedly commanding the changing measured pose.
+* Added `auto_track` launch argument, which tries to arm tracking **once** after
+  both state streams are fresh, the follower controller subscribes, and every
+  leader/follower joint is aligned to within 0.10 rad. It does **not** automatically
+  re-arm after a fault or manual disarm.
+* Joint-state topics: `/leader/joint_states`, `/follower/joint_states`.
+  Status: `/yam_teleop/status`. Manual tracking service:
+  `/yam_teleop/enable_tracking` (`std_srvs/srv/SetBool`).
+* Fixed `yam_description/CMakeLists.txt` to stop installing a nonexistent `config`
+  directory.
+
+## Integrate with your existing Git workflow
+
+On your development computer, **apply `YAM-ROS2-Integrated-Changes.patch` at the
+root of the existing Git checkout**. This patch uses the `src/...` paths already in
+your repository. No NUC ZIP download or replacement of `~/yam_ros2_ws` is needed.
+
+```bash
+git status --short
+git apply --check YAM-ROS2-Integrated-Changes.patch
+git apply YAM-ROS2-Integrated-Changes.patch
+git diff --check
+git add src/yam_ros2_control/src/yam_live_hardware.cpp \
+        src/yam_ros2_control/include/yam_ros2_control/yam_live_hardware.hpp \
+        src/yam_teleop_cpp/src/yam_live_bridge.cpp \
+        src/yam_bringup/launch/yam_live_teleop.launch.py \
+        src/yam_description/CMakeLists.txt README_LIVE_TELEOP.md tests/test_can_codec.cpp
+git commit -m "Integrate real ROS2 YAM leader follower actuation"
+git push
+```
+
+Alternatively, unpack `YAM-ROS2-Integrated-Overlay.zip` directly onto your **existing
+Git checkout** (it contains only the modified/additional files, rooted at `src/`,
+`tests/` and this README), then `git add`, `git commit`, `git push`.
+
+On the NUC (after pushing):
 
 ```bash
 cd ~/yam_ros2_ws
+# Old src backup inside the workspace prevents colcon from discovering unique packages:
+if [ -d src.backup.20261104-141941 ]; then
+  mv src.backup.20261104-141941 ~/yam_ros2_src_backup_20261104-141941
+fi
+git pull --ff-only
 source /opt/ros/jazzy/setup.bash
 colcon build --packages-select yam_description yam_ros2_control yam_teleop_cpp yam_bringup --symlink-install
 source install/setup.bash
 ```
 
-If the build says `kdl_parser` or `orocos_kdl` was not found:
+### Safe read-only launch (no motor enable)
 
 ```bash
-sudo apt update
-sudo apt install ros-jazzy-kdl-parser ros-jazzy-orocos-kdl
-```
-
-If `colcon` shows only its underlay override warning (not a failed build), use a fresh terminal and source `/opt/ros/jazzy/setup.bash` before building, rather than sourcing your own workspace ahead of the build.
-
-## 3. Non-actuating integration startup (default)
-
-This confirms that the *new complete two-namespace launch* and controller plugin registrations load without energizing motor drives:
-
-```bash
-source /opt/ros/jazzy/setup.bash
-source ~/yam_ros2_ws/install/setup.bash
 ros2 launch yam_bringup yam_live_teleop.launch.py
 ```
 
-In separate terminals:
+### Commissioned live operation — one launch, both arms
 
-```bash
-ros2 control list_hardware_components -c /leader/controller_manager
-ros2 control list_hardware_components -c /follower/controller_manager
-ros2 topic echo /leader/joint_states --once
-ros2 topic echo /follower/joint_states --once
-ros2 control list_controllers -c /follower/controller_manager
-```
+**The operator must first verify the physical motor-zero positions, the mapping of
+URDF joint coordinates to real motors, the gravity torque directions, independent
+emergency stop, and mechanical supports/fixtures.** A `true` launch flag is NOT a
+calibration or an emergency-stop test. No file in the submitted repository proves
+those physical conditions; therefore they cannot be automatically certified.
 
-Both hardware components should be active **in read-only mode**, and all 6 raw position values should be published on each namespace. The follower position controller is harmless in this mode because the hardware plugin does not send MIT commands unless actuation is explicitly authorized.
-
-## 4. Physical operation — only after on-site commissioning
-
-**Do not execute this as an initial blind startup.** Confirm, with the arm mechanically supported and emergency stop independently tested, all joint offsets, axis signs and the KDL gravity torque directions; verify safe torque loss and power-off behavior. Check that `can0` really connects to the intended leader arm and `can1` to the follower. Ensure no other process owns those interfaces. The following command is the supported launch interface **after** those verifications (replace the offset values with the commissioned offsets):
+Once they have been verified in the physical installation, start the full live
+controller with **automatic ROS 2 tracking**:
 
 ```bash
 ros2 launch yam_bringup yam_live_teleop.launch.py \
   allow_actuation:=true \
   calibration_verified:=true \
   emergency_stop_verified:=true \
-  leader_offset_1:=0.0 leader_offset_2:=0.0 leader_offset_3:=0.0 \
-  leader_offset_4:=0.0 leader_offset_5:=0.0 leader_offset_6:=0.0 \
-  follower_offset_1:=0.0 follower_offset_2:=0.0 follower_offset_3:=0.0 \
-  follower_offset_4:=0.0 follower_offset_5:=0.0 follower_offset_6:=0.0
+  auto_track:=true
 ```
 
-The `0.0` entries above are **format examples, not approved calibrations**. Replace every value before actuation. Hardware activation will verify motor gear ratios (`Gr`), `CTRL_MODE=1`, `PMAX/VMAX/TMAX`, and nonzero firmware timeout; no Flash writes occur. It will enable MIT mode for each bus, initialize follower targets to measured pose, and run leader gravity compensation. Controller Manager automatically activates hardware components during launch; there is **no extra enable command** once `allow_actuation=true` is passed. Both arms must be supported **before** launching.
+These commands rely on the default **numeric** offsets `0.0` for all twelve
+motors, which are consistent with the default factory I2RT software configuration
+but **not proof** of physical zero calibration. If your physically verified
+motor offsets differ, pass `leader_offset_1:=NUMBER` through
+`leader_offset_6:=NUMBER` and likewise `follower_offset_1` through
+`follower_offset_6`, or edit the launch argument defaults in your Git checkout.
+Never paste angle-bracket placeholders into Bash.
 
-When both `joint_states` streams are live and the physical arms have been carefully brought within 0.10 rad on every joint, explicitly arm tracking:
+When both arms start in corresponding poses within **0.10 rad at each joint**, the
+bridge waits for controller readiness and automatically enters `TRACKING ARMED`
+after at least 2 seconds. Move the leader **slowly** and the follower controller
+will command the matching pose. If the initial poses are farther apart,
+auto-tracking remains off until they are manually aligned; it never commands a
+large pose jump to force alignment.
+
+If `auto_track:=false`, the live system may instead be armed manually:
 
 ```bash
 ros2 service call /yam_teleop/enable_tracking std_srvs/srv/SetBool '{data: true}'
 ```
 
-Then move the leader **slowly**. Tracking is disabled automatically for messages older than 200 ms, >0.35 rad separation, or a motor fault. To **stop tracking but continue holding the follower**:
+Stop tracking while retaining follower position hold:
 
 ```bash
 ros2 service call /yam_teleop/enable_tracking std_srvs/srv/SetBool '{data: false}'
 ```
 
-Do **not** kill the ROS process or press a motor-disabling E-stop while the arm is unsupported; the arm may fall. An independent emergency-stop function must be available for imminent hazards, with the falling-arm risk addressed mechanically.
+This service is **not an emergency stop**, and `Ctrl+C` does not safely arrest an
+unsupported gravity-loaded arm. The CAN firmware's 8000 ms timeout is not an
+adequate personnel safety response. Loss of electrical power or motor disable
+can make an unsupported arm drop. Keep every arm supported and the workspace
+clear until the real actuator startup and stop responses have been commissioned.
 
-## 5. Layout
+For current bridge state:
 
-```text
-yam_ros2_control/
-  include/yam_ros2_control/yam_live_hardware.hpp   physical ros2_control plugin
-  src/yam_live_hardware.cpp                       leader/follower modes and safety interlock
-  include/yam_ros2_control/yam_can_register_reader.hpp   read-only register verification
-  include/yam_ros2_control/yam_can_driver.hpp     MIT codec / enable / disable
-  src/yam_can_driver.cpp                          native SocketCAN motor I/O
-
-yam_teleop_cpp/src/yam_live_bridge.cpp            physical joint-state mirror and enable service
-
-yam_description/urdf/yam_live.urdf.xacro          actual YAM V1 links/joints + live hardware parameters
-
-yam_bringup/config/yam_live_controllers.yaml     separate namespaced controllers at 50 Hz
-yam_bringup/launch/yam_live_teleop.launch.py       leader and follower controller_managers
+```bash
+ros2 topic echo /yam_teleop/status --once
 ```
 
-## 6. Completion criteria
+## Offline verification and constraints
 
-A successful `colcon` build, both Controller Managers loaded, six real joints per bus updating, live MIT mode without faults, measured follower tracking of deliberate leader movements under mechanical support, and successful tracking-disarm and hardware emergency-stop tests are all required before calling the implementation **physically validated**. None of the above is asserted solely by generating this patch.
+A standalone C++ CAN encoding test (does not activate any motor) can be compiled:
+
+```bash
+g++ -std=c++17 -Isrc/yam_ros2_control/include \
+  tests/test_can_codec.cpp src/yam_ros2_control/src/yam_can_driver.cpp \
+  -o /tmp/yam_test_can_codec
+/tmp/yam_test_can_codec
+```
+
+The source and configuration were prepared without a ROS 2 Jazzy installation or
+physical YAM motors in the authoring environment. A successful NUC `colcon build`
+and actual gravity compensation/tracking on both physical arms are **not yet
+verified**. These are hardware-commissioning requirements, not grounds to bypass
+software interlocks. In particular, the source URDF gripper/end-effector inertia
+must match the installed leader hardware for correct gravity torque, and the
+physical mount must correspond to model gravity (world -Z).
+
+Tracking design constraints: bridge max 0.20 rad/s, hardware max 0.25 rad/s,
+bridge initial alignment 0.10 rad, tracking gap cutoff 0.35 rad, follower error
+limit 0.20 rad, stale joint-state cutoff 250 ms, servo watchdog 150 ms, and
+per-joint gravity torque caps `[12,12,12,5,5,5]` Nm. These are conservative
+initial software parameters, **not empirically validated safety limits**.
