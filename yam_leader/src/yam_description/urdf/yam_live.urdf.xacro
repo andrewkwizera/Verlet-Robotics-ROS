@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="yam">
+  <xacro:arg name="role" default="follower"/>
+  <xacro:arg name="can_interface" default="can1"/>
+  <xacro:arg name="allow_actuation" default="false"/>
+  <xacro:arg name="calibration_verified" default="false"/>
+  <xacro:arg name="emergency_stop_verified" default="false"/>
+  <xacro:arg name="follower_speed" default="0.25"/>
+  <xacro:arg name="offset_1" default="0.0"/>
+  <xacro:arg name="offset_2" default="0.0"/>
+  <xacro:arg name="offset_3" default="0.0"/>
+  <xacro:arg name="offset_4" default="0.0"/>
+  <xacro:arg name="offset_5" default="0.0"/>
+  <xacro:arg name="offset_6" default="0.0"/>
+  <xacro:include filename="$(find yam_description)/urdf/yam_joints.xacro"/>
+  <xacro:yam_links_and_joints/>
+  <ros2_control name="YAMLiveHardware" type="system">
+    <hardware>
+      <plugin>yam_ros2_control/YAMLiveHardware</plugin>
+      <param name="role">$(arg role)</param>
+      <param name="can_interface">$(arg can_interface)</param>
+      <param name="allow_actuation">$(arg allow_actuation)</param>
+      <param name="calibration_verified">$(arg calibration_verified)</param>
+      <param name="emergency_stop_verified">$(arg emergency_stop_verified)</param>
+      <param name="follower_speed">$(arg follower_speed)</param>
+      <param name="model_file">$(find yam_description)/urdf/yam.urdf</param>
+      <param name="offset_1">$(arg offset_1)</param>
+      <param name="offset_2">$(arg offset_2)</param>
+      <param name="offset_3">$(arg offset_3)</param>
+      <param name="offset_4">$(arg offset_4)</param>
+      <param name="offset_5">$(arg offset_5)</param>
+      <param name="offset_6">$(arg offset_6)</param>
+    </hardware>
+    <xacro:macro name="joint_interface" params="id">
+      <joint name="joint_${id}">
+        <command_interface name="position"/>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+    </xacro:macro>
+    <xacro:joint_interface id="1"/>
+    <xacro:joint_interface id="2"/>
+    <xacro:joint_interface id="3"/>
+    <xacro:joint_interface id="4"/>
+    <xacro:joint_interface id="5"/>
+    <xacro:joint_interface id="6"/>
+  </ros2_control>
+</robot>

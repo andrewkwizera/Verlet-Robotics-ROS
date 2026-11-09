@@ -1,0 +1,140 @@
+<?xml version="1.0"?>
+
+<robot name="yam_mock">
+
+  <link name="base_link"/>
+  <link name="link_1"/>
+  <link name="link_2"/>
+  <link name="link_3"/>
+  <link name="link_4"/>
+  <link name="link_5"/>
+  <link name="link_6"/>
+
+  <joint name="joint_1" type="continuous">
+    <parent link="base_link"/>
+    <child link="link_1"/>
+    <origin xyz="0 0 0.1" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+  </joint>
+
+  <joint name="joint_2" type="continuous">
+    <parent link="link_1"/>
+    <child link="link_2"/>
+    <origin xyz="0 0 0.1" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+  <joint name="joint_3" type="continuous">
+    <parent link="link_2"/>
+    <child link="link_3"/>
+    <origin xyz="0 0 0.1" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+  <joint name="joint_4" type="continuous">
+    <parent link="link_3"/>
+    <child link="link_4"/>
+    <origin xyz="0 0 0.1" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+  </joint>
+
+  <joint name="joint_5" type="continuous">
+    <parent link="link_4"/>
+    <child link="link_5"/>
+    <origin xyz="0 0 0.1" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+  <joint name="joint_6" type="continuous">
+    <parent link="link_5"/>
+    <child link="link_6"/>
+    <origin xyz="0 0 0.1" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+  </joint>
+
+  <ros2_control name="YAMMockHardware" type="system">
+
+    <hardware>
+      <plugin>yam_ros2_control/YAMHardwareInterface</plugin>
+      <!-- true: no motors are used. Set to false to drive the real arm. -->
+      <param name="use_mock_hardware">true</param>
+      <param name="can_interface">can0</param>
+    </hardware>
+
+    <!--
+      Per-joint CAN settings (only used when use_mock_hardware is false).
+      motor_id:    CAN ID the motor listens on.
+      response_id: CAN ID the motor replies with (its "master ID").
+                   CHECK these against your motors' setup before use.
+      kp / kd:     position and damping gains. Start low and tune up.
+    -->
+
+    <joint name="joint_1">
+      <param name="motor_id">0x01</param>
+      <param name="response_id">0x11</param>
+      <param name="motor_type">DM4340</param>
+      <param name="kp">40.0</param>
+      <param name="kd">2.0</param>
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="joint_2">
+      <param name="motor_id">0x02</param>
+      <param name="response_id">0x12</param>
+      <param name="motor_type">DM4340</param>
+      <param name="kp">40.0</param>
+      <param name="kd">2.0</param>
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="joint_3">
+      <param name="motor_id">0x03</param>
+      <param name="response_id">0x13</param>
+      <param name="motor_type">DM4340</param>
+      <param name="kp">40.0</param>
+      <param name="kd">2.0</param>
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="joint_4">
+      <param name="motor_id">0x04</param>
+      <param name="response_id">0x14</param>
+      <param name="motor_type">DM4310</param>
+      <param name="kp">20.0</param>
+      <param name="kd">1.0</param>
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="joint_5">
+      <param name="motor_id">0x05</param>
+      <param name="response_id">0x15</param>
+      <param name="motor_type">DM4310</param>
+      <param name="kp">10.0</param>
+      <param name="kd">0.5</param>
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="joint_6">
+      <param name="motor_id">0x06</param>
+      <param name="response_id">0x16</param>
+      <param name="motor_type">DM4310</param>
+      <param name="kp">10.0</param>
+      <param name="kd">0.5</param>
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+  </ros2_control>
+
+</robot>

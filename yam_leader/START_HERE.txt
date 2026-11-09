@@ -1,0 +1,6 @@
+Verlet Robotics YAM Leader NUC
+
+Role-specific launch:
+ros2 launch yam_bringup yam_leader_nuc.launch.py
+
+See TWO_NUC_ROS2_SETUP_GUIDE.md for all steps.
