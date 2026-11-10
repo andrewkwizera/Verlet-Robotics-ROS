@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cstdint>
 #include <cmath>
 #include <iomanip>
 #include <sstream>
@@ -79,6 +80,10 @@ private:
     std::array<double,N> q{};
     Clock::time_point received{};
     bool valid = false;
+    std::uint64_t received_messages = 0;
+    double max_arrival_gap_ms = 0.0;
+    double max_source_stamp_gap_ms = 0.0;
+    std::int64_t last_source_stamp_ns = 0;
   };
 
   static bool decode(const sensor_msgs::msg::JointState &msg, std::array<double,N> &q) {
@@ -98,9 +103,30 @@ private:
   void record(const sensor_msgs::msg::JointState::ConstSharedPtr &msg, State &out) {
     std::array<double,N> q{};
     if (!decode(*msg,q)) return;
+    const auto now = Clock::now();
+    if (out.valid) {
+      const double arrival_gap_ms =
+        std::chrono::duration<double, std::milli>(now - out.received).count();
+      out.max_arrival_gap_ms = std::max(out.max_arrival_gap_ms, arrival_gap_ms);
+    }
+    const std::int64_t source_stamp_ns =
+      static_cast<std::int64_t>(msg->header.stamp.sec) * 1000000000LL +
+      static_cast<std::int64_t>(msg->header.stamp.nanosec);
+    if (out.last_source_stamp_ns != 0 && source_stamp_ns > out.last_source_stamp_ns) {
+      const double source_gap_ms =
+        static_cast<double>(source_stamp_ns - out.last_source_stamp_ns) / 1000000.0;
+      out.max_source_stamp_gap_ms = std::max(out.max_source_stamp_gap_ms, source_gap_ms);
+    }
+    out.last_source_stamp_ns = source_stamp_ns;
     out.q = q;
-    out.received = Clock::now();
+    out.received = now;
     out.valid = true;
+    ++out.received_messages;
+  }
+
+  double age_ms(const State &s) const {
+    if (!s.valid) return -1.0;
+    return std::chrono::duration<double, std::milli>(Clock::now() - s.received).count();
   }
 
   bool fresh(const State &s) const {
@@ -135,7 +161,19 @@ private:
   }
 
   void disarm(const std::string &why) {
-    if (tracking_) RCLCPP_ERROR(get_logger(), "Tracking disarmed: %s", why.c_str());
+    if (tracking_) {
+      last_disarm_reason_ = why;
+      RCLCPP_ERROR(get_logger(),
+        "Tracking disarmed: %s | leader_age_ms=%.1f follower_age_ms=%.1f "
+        "leader_rx=%llu follower_rx=%llu leader_max_callback_gap_ms=%.1f "
+        "follower_max_callback_gap_ms=%.1f leader_max_source_gap_ms=%.1f "
+        "follower_max_source_gap_ms=%.1f",
+        why.c_str(), age_ms(leader_), age_ms(follower_),
+        static_cast<unsigned long long>(leader_.received_messages),
+        static_cast<unsigned long long>(follower_.received_messages),
+        leader_.max_arrival_gap_ms, follower_.max_arrival_gap_ms,
+        leader_.max_source_stamp_gap_ms, follower_.max_source_stamp_gap_ms);
+    }
     tracking_ = false;
     // A latched hold target prevents an uncommanded arm from drifting when idle.
     if (fresh(follower_)) {
@@ -218,7 +256,16 @@ private:
       << " max_separation_rad=" << max_gap
       << " worst_joint=" << gap_joint
       << " command_gap_rad=" << max_command_gap
-      << " follower_speed_rad_s=" << command_rate_;
+      << " follower_speed_rad_s=" << command_rate_
+      << " leader_age_ms=" << age_ms(leader_)
+      << " follower_age_ms=" << age_ms(follower_)
+      << " leader_rx=" << leader_.received_messages
+      << " follower_rx=" << follower_.received_messages
+      << " leader_max_callback_gap_ms=" << leader_.max_arrival_gap_ms
+      << " follower_max_callback_gap_ms=" << follower_.max_arrival_gap_ms
+      << " leader_max_source_gap_ms=" << leader_.max_source_stamp_gap_ms
+      << " follower_max_source_gap_ms=" << follower_.max_source_stamp_gap_ms
+      << " last_disarm_reason=" << (last_disarm_reason_.empty() ? "none" : last_disarm_reason_);
     std_msgs::msg::String s;
     s.data = status.str();
     status_pub_->publish(s);
@@ -232,6 +279,7 @@ private:
   bool tracking_ = false;
   bool have_command_ = false;
   bool auto_armed_once_ = false;
+  std::string last_disarm_reason_;
   Clock::time_point start_{};
   Clock::time_point last_tick_{};
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr leader_sub_,follower_sub_;
