@@ -1,0 +1,128 @@
+
+<?xml version="1.0"?>
+<robot name="yam_physical_follower">
+
+  <!-- Control-interface skeleton only.
+       The link origins and axes below are placeholders.
+       Do not use this description for gravity dynamics,
+       collision detection, or Cartesian motion planning. -->
+
+  <link name="base_link"/>
+  <link name="link_1"/>
+  <link name="link_2"/>
+  <link name="link_3"/>
+  <link name="link_4"/>
+  <link name="link_5"/>
+  <link name="link_6"/>
+
+  <joint name="joint_1" type="revolute">
+    <parent link="base_link"/>
+    <child link="link_1"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-2.61799" upper="3.14159"
+           effort="28" velocity="1.0"/>
+  </joint>
+
+  <joint name="joint_2" type="revolute">
+    <parent link="link_1"/>
+    <child link="link_2"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="0.0" upper="3.66519"
+           effort="28" velocity="1.0"/>
+  </joint>
+
+  <joint name="joint_3" type="revolute">
+    <parent link="link_2"/>
+    <child link="link_3"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="0.0" upper="3.14159"
+           effort="28" velocity="1.0"/>
+  </joint>
+
+  <joint name="joint_4" type="revolute">
+    <parent link="link_3"/>
+    <child link="link_4"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.69297" upper="1.57080"
+           effort="10" velocity="1.0"/>
+  </joint>
+
+  <joint name="joint_5" type="revolute">
+    <parent link="link_4"/>
+    <child link="link_5"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.57080" upper="1.57080"
+           effort="10" velocity="1.0"/>
+  </joint>
+
+  <joint name="joint_6" type="revolute">
+    <parent link="link_5"/>
+    <child link="link_6"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-2.09440" upper="2.09440"
+           effort="10" velocity="1.0"/>
+  </joint>
+
+  <ros2_control name="YAMPhysicalFollower" type="system">
+
+    <hardware>
+      <plugin>yam_ros2_control/YAMPhysicalHardware</plugin>
+
+      <param name="can_interface">can1</param>
+      <param name="role">follower</param>
+
+      <!-- Initial software offsets.
+           These are provisional, not calibration results. -->
+      <param name="offset_1">0.0</param>
+      <param name="offset_2">0.0</param>
+      <param name="offset_3">0.0</param>
+      <param name="offset_4">0.0</param>
+      <param name="offset_5">0.0</param>
+      <param name="offset_6">0.0</param>
+    </hardware>
+
+    <joint name="joint_1">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="joint_2">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="joint_3">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="joint_4">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="joint_5">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="joint_6">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+  </ros2_control>
+
+</robot>
