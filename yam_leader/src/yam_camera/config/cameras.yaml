@@ -1,0 +1,22 @@
+# Camera and network settings validated during the two-camera bench test.
+# The by-id paths remain stable when Linux changes /dev/video numbers.
+cameras:
+  d405:
+    device: /dev/v4l/by-id/usb-Intel_R__RealSense_TM__Depth_Camera_405_Intel_R__RealSense_TM__Depth_Camera_405_404223070730-video-index4
+    port: 5000
+  d455f:
+    device: /dev/v4l/by-id/usb-Intel_R__RealSense_TM__Depth_Camera_455f_Intel_R__RealSense_TM__Depth_Camera_455f_254343065415-video-index0
+    port: 5002
+
+video:
+  width: 1280
+  height: 720
+  fps: 30
+  bitrate_kbps: 4000
+  keyframe_interval: 30
+
+network:
+  leader_ip: 192.168.50.11
+  rtp_payload_type: 96
+  mtu: 1200
+  jitter_buffer_ms: 30
