@@ -7,7 +7,9 @@ import subprocess
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, OpaqueFunction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
+from launch.conditions import IfCondition
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -17,6 +19,11 @@ def setup(context):
     bringup = get_package_share_directory('yam_bringup')
     xacro = os.path.join(desc, 'urdf', 'yam_live.urdf.xacro')
     controllers = os.path.join(bringup, 'config', 'yam_live_controllers.yaml')
+    camera_launch = os.path.join(
+        get_package_share_directory('yam_camera'),
+        'launch',
+        'leader_camera_receiver.launch.py',
+    )
 
     args = [
         'xacro', xacro,
@@ -43,6 +50,14 @@ def setup(context):
              arguments=['joint_state_broadcaster',
                         '--controller-manager', '/leader/controller_manager'],
              output='screen'),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(camera_launch),
+            condition=IfCondition(LaunchConfiguration('enable_cameras')),
+            launch_arguments={
+                'enable_d405': LaunchConfiguration('enable_d405'),
+                'enable_d455f': LaunchConfiguration('enable_d455f'),
+            }.items(),
+        ),
     ]
 
 
@@ -56,6 +71,12 @@ def generate_launch_description():
                               description='Affirm verified offsets, axes and torque direction'),
         DeclareLaunchArgument('emergency_stop_verified', default_value='false',
                               description='Affirm verified independent emergency stop'),
+        DeclareLaunchArgument('enable_cameras', default_value='false',
+                              description='Start both leader camera receiver processes'),
+        DeclareLaunchArgument('enable_d405', default_value='true',
+                              description='Start the D405 receiver when cameras are enabled'),
+        DeclareLaunchArgument('enable_d455f', default_value='true',
+                              description='Start the D455f receiver when cameras are enabled'),
     ]
     args.extend(DeclareLaunchArgument('leader_offset_' + str(j), default_value='0.0')
                 for j in range(1, 7))
