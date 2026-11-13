@@ -23,7 +23,7 @@ This guide accompanies `YAM-ROS2-Leader-NUC.zip` and `YAM-ROS2-Follower-NUC.zip`
 ## B. Prepare both NUCs
 
 1. Connect each arm's USB-CAN adapter only to its assigned NUC. Make sure mechanical supports and the independent emergency stop are present on **both** systems. Do not run the Python I2RT controller at the same time as ROS 2; two processes must not transmit commands to one CAN arm.
-2. Connect NUCs with wired Ethernet to the same LAN/switch; an ordinary router with DHCP is easiest. The lab teammate should obtain or reserve two stable addresses. **Illustrative addresses only**: leader `192.168.50.11`, follower `192.168.50.12`. Substitute the real addresses throughout.
+2. Connect NUCs with wired Ethernet to the same LAN/switch; an ordinary router with DHCP is easiest. The lab teammate should obtain or reserve two stable addresses. **Documentation-only TEST-NET addresses**: leader `192.0.2.11`, follower `192.0.2.12`. Substitute the real addresses throughout.
 3. On each NUC:
 
    ```bash
@@ -37,9 +37,9 @@ This guide accompanies `YAM-ROS2-Leader-NUC.zip` and `YAM-ROS2-Follower-NUC.zip`
 
    ```bash
    # On LEADER, using follower's REAL address:
-   ping -c 4 192.168.50.12
+   ping -c 4 192.0.2.12
    # On FOLLOWER, using leader's REAL address:
-   ping -c 4 192.168.50.11
+   ping -c 4 192.0.2.11
    ```
 
    If either fails, fix Ethernet addressing/switch/VLAN/firewall first. On a direct cable with no DHCP, the network teammate must configure two addresses in one subnet (e.g., `/24`) on the actual Ethernet interfaces. Do **not** blindly overwrite the SSH network connection you are currently using.
@@ -158,9 +158,9 @@ For a network that blocks multicast discovery, add an optional unicast static-pe
 
 ```bash
 # On LEADER (replace follower IP):
-export ROS_STATIC_PEERS=192.168.50.12
+export ROS_STATIC_PEERS=192.0.2.12
 # On FOLLOWER (replace leader IP):
-export ROS_STATIC_PEERS=192.168.50.11
+export ROS_STATIC_PEERS=192.0.2.11
 ```
 
 Run the role launch **from the same terminal** with these variables set. Do not assume setting them in one terminal automatically changes another. Static peers do not override firewall/VLAN restrictions or an incompatible RMW. Avoid `ROS_LOCALHOST_ONLY=1`.

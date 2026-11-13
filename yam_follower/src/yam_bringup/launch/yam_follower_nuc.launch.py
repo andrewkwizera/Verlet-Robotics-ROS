@@ -38,6 +38,14 @@ def setup(context):
     authorized = all(v.strip().lower() in ('true','1')
                      for v in (allow, calibrated, estop))
 
+    camera_arguments = {
+        'enable_d405': LaunchConfiguration('enable_d405'),
+        'enable_d455f': LaunchConfiguration('enable_d455f'),
+    }
+    leader_ip = LaunchConfiguration('leader_ip').perform(context).strip()
+    if leader_ip:
+        camera_arguments['leader_ip'] = leader_ip
+
     args = [
         'xacro', xacro,
         'role:=follower',
@@ -76,11 +84,7 @@ def setup(context):
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(camera_launch),
             condition=IfCondition(LaunchConfiguration('enable_cameras')),
-            launch_arguments={
-                'enable_d405': LaunchConfiguration('enable_d405'),
-                'enable_d455f': LaunchConfiguration('enable_d455f'),
-                'leader_ip': LaunchConfiguration('leader_ip'),
-            }.items(),
+            launch_arguments=camera_arguments.items(),
         ),
     ]
 
@@ -105,8 +109,9 @@ def generate_launch_description():
                               description='Start the D405 sender when cameras are enabled'),
         DeclareLaunchArgument('enable_d455f', default_value='true',
                               description='Start the D455f sender when cameras are enabled'),
-        DeclareLaunchArgument('leader_ip', default_value='192.168.50.11',
-                              description='Wired IP address of the leader NUC'),
+        DeclareLaunchArgument(
+            'leader_ip', default_value='',
+            description='Optional leader IP override; empty uses cameras.local.yaml'),
     ]
     args.extend(DeclareLaunchArgument('follower_offset_' + str(j), default_value='0.0')
                 for j in range(1, 7))

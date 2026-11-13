@@ -11,11 +11,30 @@ from launch.substitutions import LaunchConfiguration
 
 
 def load_settings():
-    """Load the tested defaults. Launch arguments can override each value."""
+    """Load public defaults, then apply optional machine-local settings."""
     package_dir = get_package_share_directory('yam_camera')
-    config_path = os.path.join(package_dir, 'config', 'cameras.yaml')
-    with open(config_path, encoding='utf-8') as config_file:
-        return yaml.safe_load(config_file)
+    config_dir = os.path.join(package_dir, 'config')
+    example_path = os.path.join(config_dir, 'cameras.example.yaml')
+    local_path = os.path.join(config_dir, 'cameras.local.yaml')
+
+    with open(example_path, encoding='utf-8') as config_file:
+        settings = yaml.safe_load(config_file)
+
+    if os.path.exists(local_path):
+        with open(local_path, encoding='utf-8') as config_file:
+            local_settings = yaml.safe_load(config_file) or {}
+        for section, values in local_settings.items():
+            if isinstance(values, dict) and isinstance(settings.get(section), dict):
+                for key, value in values.items():
+                    if isinstance(value, dict) and isinstance(
+                            settings[section].get(key), dict):
+                        settings[section][key].update(value)
+                    else:
+                        settings[section][key] = value
+            else:
+                settings[section] = values
+
+    return settings
 
 
 def receiver_process(name, enabled, port):
