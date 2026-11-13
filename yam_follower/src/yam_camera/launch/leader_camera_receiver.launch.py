@@ -40,7 +40,7 @@ def load_settings():
 def receiver_process(name, enabled, port):
     """Build one low-latency RTP/H.264 receiver process."""
     rtp_caps = [
-        'application/x-rtp,media=video,encoding-name=H264,payload=',
+        'caps=application/x-rtp,media=video,encoding-name=H264,payload=',
         LaunchConfiguration('rtp_payload_type'), ',clock-rate=90000',
     ]
 
@@ -54,7 +54,7 @@ def receiver_process(name, enabled, port):
         cmd=[
             'gst-launch-1.0', '-e', '-v',
             'udpsrc', ['port=', LaunchConfiguration(port)],
-            'caps=', rtp_caps,
+            rtp_caps,
             '!', 'rtpjitterbuffer',
             ['latency=', LaunchConfiguration('jitter_buffer_ms')],
             'drop-on-latency=true',
@@ -63,7 +63,7 @@ def receiver_process(name, enabled, port):
             '!', 'avdec_h264',
             '!', 'queue', 'max-size-buffers=1', 'leaky=downstream',
             '!', 'videoconvert',
-            '!', 'autovideosink', 'sync=false', 'async=false',
+            '!', 'autovideosink', 'sync=false',
         ],
     )
 
