@@ -77,11 +77,12 @@ camera subsystem together, start the leader receiver first:
 ./scripts/start_leader.sh enable_cameras:=true
 
 # Follower NUC
-./scripts/start_follower.sh enable_cameras:=true leader_ip:=192.168.50.11
+./scripts/start_follower.sh enable_cameras:=true
 ```
 
 The D405 uses UDP port 5000 and the D455f uses UDP port 5002. See
-`src/yam_camera/README.md` for camera-only testing and configuration overrides.
+`src/yam_camera/README.md` for camera-only testing and the ignored local
+configuration that contains the real camera paths and leader IP address.
 
 For live motor activation, specify `allow_actuation:=true`,
 `calibration_verified:=true`, and `emergency_stop_verified:=true` on **each**

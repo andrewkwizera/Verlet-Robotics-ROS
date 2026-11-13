@@ -8,5 +8,5 @@ unset ROS_LOCALHOST_ONLY
 # Recommended identical implementation on both hosts after installing rmw-fastrtps-cpp.
 export RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}"
 # For multicast-blocking managed networks, optionally set:
-# export ROS_STATIC_PEERS=192.168.50.11   # on follower, pointing to leader
-# export ROS_STATIC_PEERS=192.168.50.12   # on leader, pointing to follower
+# export ROS_STATIC_PEERS=192.0.2.11   # example: follower points to leader
+# export ROS_STATIC_PEERS=192.0.2.12   # example: leader points to follower

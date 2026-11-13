@@ -44,8 +44,17 @@ Camera startup is disabled by default. Enable it explicitly:
 ./scripts/start_leader.sh enable_cameras:=true
 
 # Follower NUC
-./scripts/start_follower.sh enable_cameras:=true leader_ip:=192.168.50.11
+./scripts/start_follower.sh enable_cameras:=true
 ```
 
-The stable camera paths and tested video settings are in
-`config/cameras.yaml`. Launch arguments can override them without editing code.
+Before building on each NUC, create the ignored local configuration:
+
+```bash
+cp src/yam_camera/config/cameras.example.yaml \
+  src/yam_camera/config/cameras.local.yaml
+```
+
+Put the real camera paths and leader IP address only in
+`config/cameras.local.yaml`. Git ignores that file. The launch files first load
+the public example and then apply values from the local file. A launch argument
+such as `leader_ip:=<LEADER_NUC_IP>` can still override the local value.
