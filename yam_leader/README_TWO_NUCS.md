@@ -22,10 +22,13 @@ sudo apt install -y python3-colcon-common-extensions python3-rosdep can-utils \
   ros-jazzy-ros2-control ros-jazzy-ros2-controllers \
   ros-jazzy-xacro ros-jazzy-robot-state-publisher \
   ros-jazzy-kdl-parser ros-jazzy-orocos-kdl \
-  ros-jazzy-rmw-fastrtps-cpp
+  ros-jazzy-rmw-fastrtps-cpp python3-yaml \
+  gstreamer1.0-tools gstreamer1.0-plugins-base \
+  gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+  gstreamer1.0-plugins-ugly gstreamer1.0-libav
 source /opt/ros/jazzy/setup.bash
 cd ~/yam_ros2_ws
-colcon build --packages-select yam_description yam_ros2_control yam_teleop_cpp yam_bringup --symlink-install
+colcon build --packages-select yam_description yam_ros2_control yam_teleop_cpp yam_camera yam_bringup --symlink-install
 source install/setup.bash
 ```
 
@@ -65,6 +68,20 @@ On existing NUC:
 
 On new NUC:
 `ros2 launch yam_bringup yam_follower_nuc.launch.py`
+
+Camera streaming is optional and disabled by default. To run the robot and
+camera subsystem together, start the leader receiver first:
+
+```bash
+# Leader NUC
+./scripts/start_leader.sh enable_cameras:=true
+
+# Follower NUC
+./scripts/start_follower.sh enable_cameras:=true leader_ip:=192.168.50.11
+```
+
+The D405 uses UDP port 5000 and the D455f uses UDP port 5002. See
+`src/yam_camera/README.md` for camera-only testing and configuration overrides.
 
 For live motor activation, specify `allow_actuation:=true`,
 `calibration_verified:=true`, and `emergency_stop_verified:=true` on **each**
