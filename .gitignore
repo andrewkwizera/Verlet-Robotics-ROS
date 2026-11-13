@@ -1,0 +1,54 @@
+# ROS 2 / colcon generated folders
+build/
+install/
+log/
+
+# Python generated files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local environments and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+credentials.json
+secrets.yaml
+secrets.yml
+
+# Machine-specific configuration
+*.local.yaml
+*.local.yml
+*.private.yaml
+*.private.yml
+**/yam_camera/config/cameras.local.yaml
+
+# ROS bags, packet captures and recorded camera data
+*.bag
+*.bag.active
+*.db3
+*.mcap
+*.pcap
+*.pcapng
+recordings/
+captures/
+
+# Editor and operating-system files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Keep confidential documents in one explicitly ignored directory.
+docs/private/
