@@ -26,6 +26,11 @@
   <exec_depend>rviz2</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
 
+  <!-- Operator dashboard (Milestone 1). Python standard library provides the
+       HTTP transport; only rclpy and sensor_msgs are required at runtime. -->
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+
   <exec_depend>yam_description</exec_depend>
   <exec_depend>yam_ros2_control</exec_depend>
   <exec_depend>yam_teleop_cpp</exec_depend>

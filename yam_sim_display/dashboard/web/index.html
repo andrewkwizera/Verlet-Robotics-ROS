@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YAM Operator Console</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">YAM</span>
+    <span class="brand-sub">Operator Console</span>
+  </div>
+  <div class="topbar-meta">
+    <span class="pill pill-unknown" id="link-pill">
+      <span class="dot"></span><span id="link-text">Connecting</span>
+    </span>
+    <span class="badge">Milestone 1 &middot; read-only</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- A. System overview ------------------------------------------------ -->
+  <section class="card span-2" id="card-overview">
+    <div class="card-head">
+      <h2>System overview</h2>
+      <span class="sub" id="overview-detail">&mdash;</span>
+    </div>
+    <div class="stat-row">
+      <article class="stat">
+        <span class="stat-label">Overall</span>
+        <strong class="stat-value" id="stat-system">Connecting</strong>
+        <span class="stat-note" id="stat-system-note">&nbsp;</span>
+      </article>
+      <article class="stat">
+        <span class="stat-label">Leader</span>
+        <strong class="stat-value" id="stat-leader">Disconnected</strong>
+        <span class="stat-note" id="stat-leader-note">&nbsp;</span>
+      </article>
+      <article class="stat">
+        <span class="stat-label">Follower</span>
+        <strong class="stat-value" id="stat-follower">Disconnected</strong>
+        <span class="stat-note" id="stat-follower-note">&nbsp;</span>
+      </article>
+      <article class="stat">
+        <span class="stat-label">Tracking error</span>
+        <strong class="stat-value" id="stat-error">&mdash;</strong>
+        <span class="stat-note" id="stat-error-note">&nbsp;</span>
+      </article>
+    </div>
+  </section>
+
+  <!-- E. Camera ---------------------------------------------------------- -->
+  <section class="card span-2" id="card-camera">
+    <div class="card-head">
+      <h2>Camera</h2>
+      <span class="badge badge-warn" id="camera-badge">Pending</span>
+    </div>
+    <div class="camera-frame">
+      <div class="camera-pending" id="camera-pending">
+        <div class="camera-glyph" aria-hidden="true">&#9673;</div>
+        <h3 id="camera-title">Camera feed pending</h3>
+        <p id="camera-reason">&nbsp;</p>
+      </div>
+      <div class="camera-mount" id="camera-mount" hidden></div>
+    </div>
+  </section>
+
+  <!-- C. Robot visualization -------------------------------------------- -->
+  <section class="card span-2" id="card-robots">
+    <div class="card-head">
+      <h2>Robot visualization</h2>
+      <span class="sub">Live joint-space projection from telemetry (not a recording)</span>
+    </div>
+    <div class="robot-grid">
+      <div class="robot-panel" id="panel-leader">
+        <div class="robot-head">
+          <span class="robot-name">Leader</span>
+          <span class="robot-state" id="viz-state-leader">&mdash;</span>
+        </div>
+        <svg class="robot-svg" id="viz-leader" viewBox="0 0 420 330"
+             role="img" aria-label="Live leader arm visualization"></svg>
+        <div class="robot-foot" id="viz-foot-leader">&nbsp;</div>
+      </div>
+      <div class="robot-panel" id="panel-follower">
+        <div class="robot-head">
+          <span class="robot-name">Follower</span>
+          <span class="robot-state" id="viz-state-follower">&mdash;</span>
+        </div>
+        <svg class="robot-svg" id="viz-follower" viewBox="0 0 420 330"
+             role="img" aria-label="Live follower arm visualization"></svg>
+        <div class="robot-foot" id="viz-foot-follower">&nbsp;</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- B. Joint telemetry ------------------------------------------------ -->
+  <section class="card span-2" id="card-joints">
+    <div class="card-head">
+      <h2>Joint telemetry</h2>
+      <span class="sub" id="joint-sub">&mdash;</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table" id="joint-table">
+        <thead>
+          <tr>
+            <th>Joint</th>
+            <th>Leader (rad)</th>
+            <th>Follower (rad)</th>
+            <th>Error (rad)</th>
+            <th>Error (mrad)</th>
+            <th class="bar-col">Magnitude</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="table-foot" id="joint-note">&nbsp;</p>
+  </section>
+
+  <!-- D. Communication health ------------------------------------------- -->
+  <section class="card span-2" id="card-comms">
+    <div class="card-head"><h2>Communication health</h2></div>
+    <div class="table-wrap">
+      <table class="data-table compact" id="comm-table">
+        <thead>
+          <tr>
+            <th>Stream</th>
+            <th>State</th>
+            <th>Rate</th>
+            <th>Age</th>
+            <th>Messages</th>
+            <th>Source &Delta;</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="latency">
+      <div class="latency-title">Network latency</div>
+      <div class="latency-value" id="latency-display">Unavailable</div>
+      <p class="latency-reason" id="latency-reason">&nbsp;</p>
+    </div>
+  </section>
+
+  <!-- F. Events --------------------------------------------------------- -->
+  <section class="card span-2" id="card-events">
+    <div class="card-head">
+      <h2>Events &amp; diagnostics</h2>
+      <span class="sub" id="event-count">&mdash;</span>
+    </div>
+    <ol class="event-log" id="event-log"></ol>
+  </section>
+
+</main>
+
+<footer class="footbar">
+  <span id="foot-source">yam_sim_display dashboard &middot; read-only observer</span>
+  <span id="foot-poll">&mdash;</span>
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>

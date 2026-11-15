@@ -8,6 +8,28 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 
+# --- Operator dashboard (Milestone 1) ---------------------------------------
+# Installed entry point: resolved from lib/${PROJECT_NAME} so `ros2 run` and
+# `ros2 launch` find it on the normal executable path.
+install(
+  PROGRAMS dashboard/run.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME dashboard_node
+)
+
+# Importable package (telemetry, config, HTTP transport, node) plus the static
+# web assets. Installed under share/ so runtime lookups never depend on the
+# source tree.
+install(
+  DIRECTORY dashboard/
+  DESTINATION share/${PROJECT_NAME}/dashboard
+  FILES_MATCHING
+    PATTERN "*.py"
+    PATTERN "*.html"
+    PATTERN "*.css"
+    PATTERN "*.js"
+)
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # Skip copyright/cpplint checks: launch-only package with no C++ sources.
