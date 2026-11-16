@@ -1,0 +1,46 @@
+# Supervision configuration (Milestone 2).
+#
+# Passed as a second parameter file by dashboard.launch.py.  Every value is
+# declared by the dashboard node; this file only overrides defaults from
+# dashboard/supervision/config.py.
+#
+# Safety note: `safety.source` only accepts "none" in Milestone 2.  There is no
+# safety-rated input in the simulation, so safety status is Unknown and
+# readiness is Not Ready.  Never change this to make a demo look green.
+
+yam_dashboard:
+  ros__parameters:
+
+    supervision:
+      # Readiness starts as Initializing.  It becomes Not Ready only after this
+      # grace period, so a slow start is not misreported as a failure.
+      startup_grace_s: 5.0
+
+      # All prerequisites must hold continuously for this long before Ready.
+      ready_hold_s: 1.0
+
+      # Minimum interval between log lines for a newly appearing reason code.
+      reason_log_min_interval_s: 5.0
+
+      health:
+        # A rejected-frame counter increase keeps health Degraded this long.
+        reject_window_s: 5.0
+        # Source-stamp gaps larger than this are reported as a quality issue.
+        source_dt_warn_ms: 250.0
+
+      safety:
+        # Only "none" is supported. Missing input is always Unknown.
+        source: "none"
+        timeout_ms: 2000.0
+        # A latched fault clears only after this much fresh explicit Normal.
+        fault_clear_hold_s: 1.0
+
+      readiness:
+        expected_joint_count: 6
+        # Diagnostic only, mirroring the bridge's 0.10 rad arm tolerance. It is
+        # not a readiness prerequisite in Milestone 2.
+        alignment_diagnostic_rad: 0.10
+
+      session:
+        # Browser-side session auto-pauses after this long without a poll.
+        inactivity_s: 30.0

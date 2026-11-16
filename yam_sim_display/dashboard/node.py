@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import signal
 import threading
+import time
 from typing import Optional
 
 import rclpy
@@ -31,6 +32,8 @@ from sensor_msgs.msg import JointState
 
 from .config import DEFAULTS, DashboardConfig
 from .http_server import ServerThread
+from .state_cache import StateCache
+from .supervision import SUPERVISION_DEFAULTS, SupervisionConfig, Supervisor
 from .telemetry import TelemetryStore
 
 # Derived-state evaluation is decoupled from the browser poll interval so a
@@ -57,7 +60,23 @@ class DashboardNode(Node):
             for name, default in DEFAULTS.items()
         }
         self.config = DashboardConfig.from_parameter_dict(values)
+
+        supervision_values = {
+            name: self.declare_parameter(name, default).value
+            for name, default in SUPERVISION_DEFAULTS.items()
+        }
+        self.supervision_config = SupervisionConfig.from_parameter_dict(
+            supervision_values
+        )
+
         self.store = TelemetryStore(self.config)
+        self.cache = StateCache()
+        # Milestone 2 ships no safety adapter: safety is Unknown, never Normal.
+        self.supervisor = Supervisor(
+            self.supervision_config,
+            self.config,
+            self.store.events,
+        )
 
         qos = _joint_qos()
         self.create_subscription(
@@ -79,7 +98,7 @@ class DashboardNode(Node):
         self._reported_first = {"leader": False, "follower": False}
 
         self._server = ServerThread(
-            self.store,
+            self.cache,
             self.config.bind_address,
             self.config.port,
             web_dir,
@@ -92,6 +111,11 @@ class DashboardNode(Node):
             f"YAM operator dashboard listening on http://{host}:{port} "
             f"(read-only; leader={self.config.leader_topic}, "
             f"follower={self.config.follower_topic})"
+        )
+        self.get_logger().info(
+            "Supervision enabled; safety source="
+            f"'{self.supervision_config.safety_source}' "
+            "(no safety input -> Unknown)"
         )
         if self.config.bind_address not in ("127.0.0.1", "localhost", "::1"):
             self.get_logger().warning(
@@ -128,7 +152,17 @@ class DashboardNode(Node):
     def _tick(self) -> None:
         if not self._running:
             return
-        self.store.evaluate()
+        now = time.monotonic()
+        telemetry = self.store.evaluate(now)
+        supervision = self.supervisor.evaluate(telemetry, now)
+
+        # Publish one merged, JSON-ready snapshot.  The M1 keys are untouched;
+        # schema 2 only signals the additive ``supervision`` block.
+        merged = dict(telemetry)
+        merged["schema"] = 2
+        merged["supervision"] = supervision
+        merged["events"] = self.store.events.snapshot()
+        self.cache.publish(merged)
 
     # -- lifecycle ----------------------------------------------------------
 

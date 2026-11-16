@@ -56,10 +56,11 @@ class _DashboardHandler(BaseHTTPRequestHandler):
     # -- responders ---------------------------------------------------------
 
     def _serve_state(self) -> None:
-        snapshot = self.server.store.snapshot()  # type: ignore[attr-defined]
+        source = self.server.snapshot_source  # type: ignore[attr-defined]
+        snapshot = source.snapshot()
         if snapshot is None:
             snapshot = {
-                "schema": 1,
+                "schema": 2,
                 "ready": False,
                 "message": "Dashboard is starting; no telemetry evaluated yet.",
             }
@@ -116,8 +117,8 @@ class DashboardHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address: tuple[str, int], store, web_dir: str) -> None:
-        self.store = store
+    def __init__(self, address: tuple[str, int], snapshot_source, web_dir: str) -> None:
+        self.snapshot_source = snapshot_source
         self.web_dir = web_dir
         super().__init__(address, _DashboardHandler)
 
@@ -125,8 +126,12 @@ class DashboardHTTPServer(ThreadingHTTPServer):
 class ServerThread:
     """Owns the HTTP server and its serving thread."""
 
-    def __init__(self, store, bind_address: str, port: int, web_dir: str) -> None:
-        self._server = DashboardHTTPServer((bind_address, port), store, web_dir)
+    def __init__(
+        self, snapshot_source, bind_address: str, port: int, web_dir: str
+    ) -> None:
+        self._server = DashboardHTTPServer(
+            (bind_address, port), snapshot_source, web_dir
+        )
         self._thread = threading.Thread(
             target=self._server.serve_forever,
             name="yam-dashboard-http",

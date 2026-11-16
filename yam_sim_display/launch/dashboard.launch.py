@@ -21,8 +21,9 @@ from launch_ros.actions import Node
 def _launch_setup(context, *args, **kwargs):
     share = get_package_share_directory("yam_sim_display")
     config_file = os.path.join(share, "config", "dashboard.yaml")
+    supervision_file = os.path.join(share, "config", "supervision.yaml")
 
-    parameters = [config_file]
+    parameters = [config_file, supervision_file]
 
     # Empty defaults mean "use the value from dashboard.yaml".  A non-empty
     # launch argument takes precedence over the YAML without editing the file.
@@ -39,6 +40,14 @@ def _launch_setup(context, *args, **kwargs):
     refresh_ms = LaunchConfiguration("refresh_ms").perform(context).strip()
     if refresh_ms:
         overrides["refresh_ms"] = int(refresh_ms)
+
+    startup_grace = LaunchConfiguration("startup_grace_s").perform(context).strip()
+    if startup_grace:
+        overrides["supervision.startup_grace_s"] = float(startup_grace)
+
+    ready_hold = LaunchConfiguration("ready_hold_s").perform(context).strip()
+    if ready_hold:
+        overrides["supervision.ready_hold_s"] = float(ready_hold)
 
     if overrides:
         parameters.append(overrides)
@@ -74,6 +83,22 @@ def generate_launch_description():
             "refresh_ms",
             default_value="",
             description="Browser poll interval in ms (default: 100)",
+        ),
+        DeclareLaunchArgument(
+            "startup_grace_s",
+            default_value="",
+            description=(
+                "Readiness startup grace in seconds (default: value in "
+                "config/supervision.yaml, 5.0)"
+            ),
+        ),
+        DeclareLaunchArgument(
+            "ready_hold_s",
+            default_value="",
+            description=(
+                "How long all readiness prerequisites must hold before Ready "
+                "(default: value in config/supervision.yaml, 1.0)"
+            ),
         ),
         OpaqueFunction(function=_launch_setup),
     ])

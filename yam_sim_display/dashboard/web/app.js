@@ -1,7 +1,8 @@
-/* YAM Operator Console — Milestone 1 (read-only observer).
+/* YAM Operator Console — Milestone 2 (read-only supervision).
  *
  * Presentation layer only. It consumes the JSON snapshot produced by the ROS
- * node and never speaks to ROS directly.
+ * node and never speaks to ROS directly. The four supervision dimensions are
+ * displayed independently; no combined "overall" verdict is stored.
  *
  * The forward-kinematics + projection code below is derived from the real
  * URDF joint origins/axes in yam_description/urdf/yam_joints.xacro, so the
@@ -15,6 +16,12 @@
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 const $ = (id) => document.getElementById(id);
+
+function setText(id, text) {
+  const node = $(id);
+  if (node) node.textContent = text;
+  return node;
+}
 
 function svgEl(tag, attrs, parent) {
   const node = document.createElementNS(SVG_NS, tag);
@@ -43,6 +50,19 @@ function fmtRate(hz) {
   return `${hz.toFixed(1)} Hz`;
 }
 
+function fmtDuration(seconds) {
+  if (seconds === null || seconds === undefined || Number.isNaN(Number(seconds))) {
+    return "\u2014";
+  }
+  const total = Math.max(0, Math.floor(Number(seconds)));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  const mm = String(minutes).padStart(2, "0");
+  const ss = String(secs).padStart(2, "0");
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
 function stateClass(state) {
   return `state-${state || "disconnected"}`;
 }
@@ -55,6 +75,10 @@ function shortTime(iso) {
   const parsed = new Date(iso);
   if (Number.isNaN(parsed.getTime())) return String(iso || "").slice(11, 19);
   return parsed.toLocaleTimeString([], { hour12: false });
+}
+
+function setClass(element, className) {
+  if (element) element.className = className;
 }
 
 /* ------------------------------------------------------- kinematics (URDF)
@@ -300,45 +324,28 @@ function renderRobot(role, stream, color) {
   }
 }
 
-/* --------------------------------------------------------------- overview */
+/* ------------------------------------------------------ per-robot summaries */
 
-function renderOverview(data) {
-  const system = data.system || {};
+function renderRobotSummaries(data) {
   const streams = data.streams || {};
-
-  const overall = $("stat-system");
-  overall.textContent = system.state_label || "\u2014";
-  overall.className = `stat-value ${stateClass(system.state)}`;
-  $("stat-system-note").textContent = system.label || "\u2014";
-  $("overview-detail").textContent = system.detail || "\u2014";
-
+  const tracking = data.tracking || {};
   for (const role of ["leader", "follower"]) {
     const stream = streams[role] || {};
-    const value = $(`stat-${role}`);
-    value.textContent = stream.state_label || "Disconnected";
-    value.className = `stat-value ${stateClass(stream.state)}`;
-    $(`stat-${role}-note`).textContent = stream.count
-      ? `${fmtRate(stream.rate_hz)} \u00b7 age ${fmtAge(stream.age_ms)}`
-      : "no messages received";
+    const foot = $(`viz-foot-${role}`);
+    if (!foot) continue;
+    let text;
+    if (role === "follower" && tracking.available) {
+      text = `${fmtRate(stream.rate_hz)} \u00b7 max |err| `
+        + `${fmt(tracking.max_abs_error_rad * 1000, 1)} mrad \u00b7 RMS `
+        + `${fmt(tracking.rms_error_rad * 1000, 1)} mrad`;
+    } else if (stream.count) {
+      text = `${stream.state_label || stream.state || "\u2014"} \u00b7 `
+        + `${fmtRate(stream.rate_hz)} \u00b7 age ${fmtAge(stream.age_ms)}`;
+    } else {
+      text = "awaiting telemetry";
+    }
+    foot.textContent = text;
   }
-
-  const tracking = data.tracking || {};
-  const errorValue = $("stat-error");
-  if (tracking.available) {
-    errorValue.textContent = `${fmt(tracking.max_abs_error_rad * 1000, 1)} mrad`;
-    const warnRad = (data.config || {}).max_error_warn_rad || 0.15;
-    errorValue.className = `stat-value ${tracking.max_abs_error_rad >= warnRad ? "state-warning" : "state-connected"}`;
-    $("stat-error-note").textContent =
-      `RMS ${fmt(tracking.rms_error_rad * 1000, 1)} mrad \u00b7 worst ${tracking.max_abs_error_joint || "\u2014"}`;
-  } else {
-    errorValue.textContent = "\u2014";
-    errorValue.className = "stat-value val-muted";
-    $("stat-error-note").textContent = "needs both streams";
-  }
-
-  const pill = $("link-pill");
-  pill.className = pillClass(system.state);
-  $("link-text").textContent = system.state_label || "Unknown";
 }
 
 /* ---------------------------------------------------------- joint telemetry */
@@ -367,8 +374,8 @@ function renderJoints(data) {
     td.textContent = "No joint-state data received yet.";
     tr.appendChild(td);
     body.appendChild(tr);
-    $("joint-sub").textContent = "\u2014";
-    $("joint-note").textContent = "Waiting for /leader/joint_states and /follower/joint_states.";
+    setText("joint-sub", "\u2014");
+    setText("joint-note", "Waiting for /leader/joint_states and /follower/joint_states.");
     return;
   }
 
@@ -506,13 +513,8 @@ function renderComms(data) {
 
   $("latency-display").textContent = (data.latency || {}).display
     || "Unavailable \u2014 no valid latency measurement source";
-  $("latency-reason").textContent = (data.latency || {}).reason || "";
-
-  const foot = $("foot-poll");
-  if (foot) {
-    foot.textContent = `polling ${config.refresh_ms || "\u2014"} ms \u00b7 `
-      + `stale ${config.stale_ms || "\u2014"} ms \u00b7 schema ${data.schema || 1}`;
-  }
+  const latencyReason = $("latency-reason");
+  if (latencyReason) latencyReason.textContent = (data.latency || {}).reason || "";
 }
 
 /* ---------------------------------------------------------------- camera */
@@ -522,147 +524,671 @@ function renderCamera(data) {
   const pending = $("camera-pending");
   const mount = $("camera-mount");
 
-  $("camera-title").textContent = camera.title || "Camera feed pending";
-  $("camera-reason").textContent = camera.reason || "";
+  setText("camera-title", camera.title || "Camera feed pending");
+  setText("camera-reason", camera.reason || "");
 
   if (camera.stream_url) {
-    pending.hidden = true;
-    mount.hidden = false;
-    if (!mount.querySelector("img")) {
-      const img = document.createElement("img");
-      img.alt = "Live camera feed";
-      img.src = camera.stream_url;
-      mount.appendChild(img);
+    if (pending) pending.hidden = true;
+    if (mount) {
+      mount.hidden = false;
+      if (!mount.querySelector("img")) {
+        const img = document.createElement("img");
+        img.alt = "Live camera feed";
+        img.src = camera.stream_url;
+        mount.appendChild(img);
+      }
     }
-    $("camera-badge").textContent = "Live";
-    $("camera-badge").className = "badge";
+    setText("camera-badge", "Live");
+    const badge = $("camera-badge");
+    if (badge) badge.className = "badge";
   } else {
-    pending.hidden = false;
-    mount.hidden = true;
-    $("camera-badge").textContent = camera.state === "pending" ? "Pending" : "Unavailable";
-    $("camera-badge").className = "badge badge-warn";
+    if (pending) pending.hidden = false;
+    if (mount) mount.hidden = true;
+    setText("camera-badge", camera.state === "pending" ? "Pending" : "Unavailable");
+    const badge = $("camera-badge");
+    if (badge) badge.className = "badge badge-warn";
   }
 }
 
-/* ---------------------------------------------------------------- events */
+/* ------------------------------------------------------------ supervision */
 
-let lastEventSignature = "";
+const SUPERVISION_DIMENSIONS = ["health", "readiness", "safety"];
+const SESSION_PILL_CLASS = {
+  idle: "sup-unknown",
+  active: "sup-ok",
+  paused: "sup-warn",
+  ended: "sup-neutral",
+};
 
-function renderEvents(data) {
-  const events = data.events || [];
-  const list = $("event-log");
-  const newest = events.length ? events[events.length - 1].id : 0;
-  const signature = `${events.length}:${newest}`;
-  if (signature === lastEventSignature) return;
-  lastEventSignature = signature;
+function supervisionTone(dimension, state) {
+  const tones = {
+    health: { healthy: "ok", degraded: "warn", disconnected: "bad" },
+    readiness: { ready: "ok", not_ready: "warn", initializing: "unknown" },
+    // Unknown must never adopt the healthy colour.
+    safety: { normal: "ok", warning: "warn", fault: "bad", unknown: "unknown" },
+  };
+  return (tones[dimension] || {})[state] || "unknown";
+}
 
-  list.textContent = "";
-  $("event-count").textContent = events.length
-    ? `${events.length} event${events.length === 1 ? "" : "s"}`
-    : "no events";
+let session = null;
+let drawerSignature = "";
+let eventFilter = "all";
 
-  if (!events.length) {
-    const empty = document.createElement("li");
-    empty.className = "event-empty";
-    empty.textContent = "No events recorded yet. State changes appear here.";
-    list.appendChild(empty);
+function renderSupervision(data) {
+  const supervision = data.supervision;
+  if (!supervision) {
+    for (const dimension of SUPERVISION_DIMENSIONS) {
+      setSupervisionPill(dimension, "Unavailable", "unknown", []);
+    }
     return;
   }
 
-  for (let i = events.length - 1; i >= 0; i -= 1) {
-    const event = events[i];
+  for (const dimension of SUPERVISION_DIMENSIONS) {
+    const payload = supervision[dimension] || {};
+    const reasons = payload.reasons || [];
+    setSupervisionPill(
+      dimension,
+      payload.label || "Unknown",
+      supervisionTone(dimension, payload.state),
+      reasons
+    );
+  }
+
+  if (session && supervision.session) {
+    if (supervision.session.transitions) {
+      session.setTransitions(supervision.session.transitions);
+    }
+    if (Number.isFinite(supervision.session.inactivity_s) && session.setInactivity) {
+      session.setInactivity(supervision.session.inactivity_s);
+    }
+  }
+
+  renderDrawer(data);
+}
+
+function setSupervisionPill(dimension, label, tone, reasons) {
+  const pill = $(`sup-${dimension}`);
+  const stateEl = $(`sup-${dimension}-state`);
+  const countEl = $(`sup-${dimension}-count`);
+  if (pill) {
+    pill.className = `sup-pill sup-${tone}`;
+    pill.setAttribute(
+      "aria-label",
+      `${dimension}: ${label}. ${reasons.length} reason(s). Open supervision detail.`
+    );
+    pill.title = reasons.length
+      ? `${dimension}: ${label} — ${reasons[0].message}`
+      : `${dimension}: ${label}`;
+  }
+  if (stateEl) stateEl.textContent = label;
+  if (countEl) {
+    countEl.textContent = reasons.length ? String(reasons.length) : "";
+    countEl.hidden = !reasons.length;
+  }
+}
+
+function drawerDataSignature(data) {
+  const supervision = data.supervision || {};
+  const parts = [data.events ? data.events.length : 0, eventFilter];
+  for (const dimension of SUPERVISION_DIMENSIONS) {
+    const payload = supervision[dimension] || {};
+    parts.push(payload.state || "");
+    parts.push((payload.reasons || []).map((reason) => reason.code).join(","));
+    if (dimension === "readiness") {
+      parts.push((payload.prerequisites || [])
+        .map((item) => `${item.id}:${item.passed ? 1 : 0}`).join(","));
+      parts.push((payload.diagnostics || [])
+        .map((item) => `${item.id}:${item.passed ? 1 : 0}`).join(","));
+    }
+  }
+  if (session) {
+    const snap = session.snapshot();
+    // Deliberately excludes elapsed time: it changes every second and would
+    // rebuild the whole drawer (losing scroll position) while open.
+    parts.push(snap.state, snap.ended_summary ? "ended" : "");
+  }
+  return parts.join("|");
+}
+
+function renderDrawer(data) {
+  const signature = drawerDataSignature(data);
+  if (signature === drawerSignature) return;
+  drawerSignature = signature;
+
+  const supervision = data.supervision || {};
+  const container = $("drawer-dimensions");
+  if (container) {
+    container.textContent = "";
+    for (const dimension of ["health", "readiness", "safety"]) {
+      container.appendChild(dimensionCard(dimension, supervision[dimension]));
+    }
+    container.appendChild(sessionCard());
+  }
+
+  renderPrerequisites(supervision.readiness || {});
+  renderSafetyDetail(supervision.safety || {});
+  renderSessionDetail();
+  renderFullEvents(data);
+}
+
+function dimensionCard(dimension, payload) {
+  const card = document.createElement("article");
+  card.className = "dim-card";
+
+  const head = document.createElement("div");
+  head.className = "dim-head";
+  const name = document.createElement("span");
+  name.className = "dim-name";
+  name.textContent = dimension;
+  const value = document.createElement("span");
+  value.className = `dim-value tone-${supervisionTone(dimension, (payload || {}).state)}`;
+  value.textContent = (payload || {}).label || "Unavailable";
+  head.appendChild(name);
+  head.appendChild(value);
+  card.appendChild(head);
+
+  const meta = document.createElement("p");
+  meta.className = "dim-meta";
+  meta.textContent = payload
+    ? `for ${fmtDuration(payload.since_uptime_s)}`
+    : "waiting for dashboard data";
+  card.appendChild(meta);
+
+  const reasons = (payload || {}).reasons || [];
+  if (!reasons.length) {
+    const empty = document.createElement("p");
+    empty.className = "dim-empty";
+    empty.textContent = payload ? "No active reasons." : "No data.";
+    card.appendChild(empty);
+    return card;
+  }
+
+  const list = document.createElement("ul");
+  list.className = "reason-list";
+  for (const reason of reasons) {
     const item = document.createElement("li");
-
-    const time = document.createElement("span");
-    time.className = "event-time";
-    time.textContent = shortTime(event.time);
-    item.appendChild(time);
-
-    const level = document.createElement("span");
-    level.className = `event-level event-level-${event.level}`;
-    level.textContent = event.level;
-    item.appendChild(level);
-
-    const source = document.createElement("span");
-    source.className = "event-source";
-    source.textContent = event.source;
-    item.appendChild(source);
-
-    const message = document.createElement("span");
-    message.className = "event-message";
-    message.textContent = event.message;
-    item.appendChild(message);
-
+    const code = document.createElement("code");
+    code.textContent = reason.code;
+    const text = document.createElement("span");
+    text.textContent = reason.message;
+    item.appendChild(code);
+    item.appendChild(text);
     list.appendChild(item);
   }
+  card.appendChild(list);
+  return card;
+}
+
+function sessionCard() {
+  const card = document.createElement("article");
+  card.className = "dim-card";
+  const head = document.createElement("div");
+  head.className = "dim-head";
+  const name = document.createElement("span");
+  name.className = "dim-name";
+  name.textContent = "session";
+  const value = document.createElement("span");
+  const snap = session ? session.snapshot() : { state: "idle", label: "Idle" };
+  value.className = `dim-value tone-${SESSION_PILL_CLASS[snap.state].replace("sup-", "")}`;
+  value.textContent = snap.label;
+  head.appendChild(name);
+  head.appendChild(value);
+  card.appendChild(head);
+  const meta = document.createElement("p");
+  meta.className = "dim-meta";
+  meta.textContent = snap.state === "idle"
+    ? "not started"
+    : `elapsed ${snap.elapsed_text} · console only`;
+  card.appendChild(meta);
+  return card;
+}
+
+function renderPrerequisites(readiness) {
+  const body = $("drawer-prereq-table")
+    ? $("drawer-prereq-table").querySelector("tbody") : null;
+  if (!body) return;
+  body.textContent = "";
+  const prerequisites = readiness.prerequisites || [];
+  if (!prerequisites.length) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 4;
+    td.className = "val-muted";
+    td.textContent = "Waiting for supervision data.";
+    tr.appendChild(td);
+    body.appendChild(tr);
+  }
+  for (const item of prerequisites) {
+    const tr = document.createElement("tr");
+    const name = document.createElement("td");
+    name.className = "joint-name";
+    name.textContent = item.description || item.id;
+    const source = document.createElement("td");
+    source.textContent = item.source || "\u2014";
+    const result = document.createElement("td");
+    const chip = document.createElement("span");
+    chip.className = `result-chip ${item.passed ? "result-pass" : "result-fail"}`;
+    chip.textContent = item.passed ? "PASS" : "FAIL";
+    result.appendChild(chip);
+    const evidence = document.createElement("td");
+    evidence.className = "evidence";
+    evidence.textContent = item.evidence || "\u2014";
+    tr.appendChild(name);
+    tr.appendChild(source);
+    tr.appendChild(result);
+    tr.appendChild(evidence);
+    body.appendChild(tr);
+  }
+
+  const note = $("drawer-readiness-note");
+  if (note) note.textContent = readiness.note || "";
+  const diagnostics = $("drawer-diagnostics");
+  if (diagnostics) {
+    diagnostics.textContent = "";
+    for (const item of readiness.diagnostics || []) {
+      const row = document.createElement("div");
+      row.className = "diagnostic-row";
+      const label = document.createElement("span");
+      label.textContent = `${item.description}: `;
+      const value = document.createElement("span");
+      value.className = item.passed ? "val-ok" : "val-warn";
+      value.textContent = `${item.evidence} ${item.passed ? "(within)" : "(outside)"}`;
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = "DIAGNOSTIC";
+      row.appendChild(label);
+      row.appendChild(tag);
+      row.appendChild(value);
+      diagnostics.appendChild(row);
+    }
+  }
+}
+
+function renderSafetyDetail(safety) {
+  const explanation = $("drawer-safety-explanation");
+  const required = $("drawer-safety-required");
+  if (explanation) {
+    explanation.textContent = safety.explanation
+      || "Safety status is input-driven; the dashboard cannot certify safety.";
+  }
+  if (required) {
+    required.textContent = safety.required_input || "";
+  }
+}
+
+function renderSessionDetail() {
+  const container = $("drawer-session");
+  if (!container) return;
+  const snap = session ? session.snapshot() : null;
+  if (!snap) {
+    container.textContent = "Session controls unavailable.";
+    return;
+  }
+  const lines = [`State: ${snap.label}`, `Elapsed: ${snap.elapsed_text}`];
+  if (snap.pause_reason) lines.push(`Pause reason: ${snap.pause_reason}`);
+  if (snap.state === "ended" && snap.ended_summary) {
+    lines.push(
+      `Last session: ${snap.ended_summary.duration_text}, `
+      + `${snap.ended_summary.transitions} transition(s), `
+      + `${snap.ended_summary.events_seen} event(s) seen`
+    );
+  }
+  container.textContent = lines.join(" \u00b7 ");
+}
+
+/* ----------------------------------------------------------------- events */
+
+let lastPreviewSignature = "";
+let lastFullSignature = "";
+
+function renderEvents(data) {
+  const events = data.events || [];
+  const newest = events.length ? events[events.length - 1].id : 0;
+  const signature = `${events.length}:${newest}`;
+
+  if (session) session.setEventCount(events.length);
+
+  if (signature !== lastPreviewSignature) {
+    lastPreviewSignature = signature;
+    const list = $("event-log");
+    if (list) {
+      list.textContent = "";
+      if (!events.length) {
+        const empty = document.createElement("li");
+        empty.className = "event-empty";
+        empty.textContent = "No events recorded yet. State changes appear here.";
+        list.appendChild(empty);
+      } else {
+        for (const event of events.slice(-3).reverse()) {
+          list.appendChild(eventItem(event));
+        }
+      }
+    }
+    const count = $("event-count");
+    if (count) {
+      count.textContent = events.length
+        ? `${Math.min(3, events.length)} of ${events.length} event${events.length === 1 ? "" : "s"}`
+        : "no events";
+    }
+  }
+
+  renderFullEvents(data);
+}
+
+function fullEventsSignature(data) {
+  const events = data.events || [];
+  const newest = events.length ? events[events.length - 1].id : 0;
+  const sessionLength = session
+    ? (session.snapshot().history || []).length
+    : 0;
+  return `${events.length}:${newest}:${eventFilter}:${sessionLength}`;
+}
+
+function renderFullEvents(data) {
+  const list = $("drawer-event-log");
+  if (!list) return;
+  const signature = fullEventsSignature(data);
+  if (signature === lastFullSignature) return;
+  lastFullSignature = signature;
+  const events = filteredEvents(data.events || []);
+  list.textContent = "";
+  if (!events.length) {
+    const empty = document.createElement("li");
+    empty.className = "event-empty";
+    empty.textContent = eventFilter === "all"
+      ? "No events recorded yet."
+      : `No ${eventFilter} events recorded yet.`;
+    list.appendChild(empty);
+  } else {
+    for (const event of events.slice().reverse()) {
+      list.appendChild(eventItem(event));
+    }
+  }
+  const count = $("drawer-event-count");
+  if (count) {
+    count.textContent = `${events.length} event${events.length === 1 ? "" : "s"}`
+      + (eventFilter === "all" ? "" : ` matching ${eventFilter}`);
+  }
+}
+
+function filteredEvents(events) {
+  if (eventFilter === "all") return events;
+  if (eventFilter === "session") {
+    if (!session) return [];
+    return (session.snapshot().history || []).map((entry) => ({
+      id: `session-${entry.at}`,
+      time: new Date(entry.at).toISOString(),
+      level: "info",
+      source: "session",
+      message: `${entry.from} → ${entry.to} (${entry.action})`
+        + (entry.reason ? ` — ${entry.reason}` : ""),
+    }));
+  }
+  return events.filter((event) => {
+    const source = String(event.source || "");
+    if (eventFilter === "health") {
+      return source === "supervision.health"
+        || source === "leader" || source === "follower" || source === "tracking";
+    }
+    return source === `supervision.${eventFilter}`;
+  });
+}
+
+function eventItem(event) {
+  const item = document.createElement("li");
+
+  const time = document.createElement("span");
+  time.className = "event-time";
+  time.textContent = shortTime(event.time);
+  item.appendChild(time);
+
+  const level = document.createElement("span");
+  level.className = `event-level event-level-${event.level}`;
+  level.textContent = event.level;
+  item.appendChild(level);
+
+  const source = document.createElement("span");
+  source.className = "event-source";
+  source.textContent = event.source;
+  item.appendChild(source);
+
+  const message = document.createElement("span");
+  message.className = "event-message";
+  message.textContent = event.message;
+  item.appendChild(message);
+
+  return item;
+}
+
+function setEventFilter(filter) {
+  eventFilter = filter;
+  for (const chip of document.querySelectorAll("#event-filters .chip")) {
+    chip.classList.toggle("chip-active", chip.dataset.filter === filter);
+  }
+  drawerSignature = "";
+  lastFullSignature = "";
+  renderFullEvents(lastSnapshot || {});
+}
+
+/* ----------------------------------------------------------------- drawer */
+
+let drawerReturnFocus = null;
+
+function openDrawer(sectionId) {
+  const drawer = $("supervision-drawer");
+  const backdrop = $("drawer-backdrop");
+  if (!drawer || !backdrop) return;
+  drawerReturnFocus = document.activeElement;
+  drawer.hidden = false;
+  backdrop.hidden = false;
+  document.body.classList.add("drawer-open");
+  const close = $("drawer-close");
+  if (close) close.focus();
+  if (sectionId) {
+    const section = $(sectionId);
+    if (section) section.scrollIntoView({ block: "start" });
+  }
+}
+
+function closeDrawer() {
+  const drawer = $("supervision-drawer");
+  const backdrop = $("drawer-backdrop");
+  if (!drawer || !backdrop) return;
+  drawer.hidden = true;
+  backdrop.hidden = true;
+  document.body.classList.remove("drawer-open");
+  if (drawerReturnFocus && typeof drawerReturnFocus.focus === "function") {
+    drawerReturnFocus.focus();
+  }
+  drawerReturnFocus = null;
+}
+
+function trapFocus(event) {
+  const drawer = $("supervision-drawer");
+  if (!drawer || drawer.hidden || event.key !== "Tab") return;
+  const focusable = drawer.querySelectorAll(
+    "button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])"
+  );
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+function bindDrawer() {
+  for (const pill of document.querySelectorAll(".sup-pill")) {
+    pill.addEventListener("click", () => openDrawer());
+  }
+  const openLog = $("open-log");
+  if (openLog) {
+    openLog.addEventListener("click", () => {
+      openDrawer("drawer-events-section");
+      const sessionChip = document.querySelector("#event-filters .chip[data-filter='all']");
+      if (sessionChip) sessionChip.focus();
+    });
+  }
+  const close = $("drawer-close");
+  if (close) close.addEventListener("click", closeDrawer);
+  const backdrop = $("drawer-backdrop");
+  if (backdrop) backdrop.addEventListener("click", closeDrawer);
+  const filters = $("event-filters");
+  if (filters) {
+    filters.addEventListener("click", (event) => {
+      const chip = event.target.closest(".chip");
+      if (chip) setEventFilter(chip.dataset.filter);
+    });
+  }
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeDrawer();
+    trapFocus(event);
+  });
+}
+
+/* -------------------------------------------------------------- diagnostics */
+
+const DIAG_ENABLED = new URLSearchParams(window.location.search).get("diag") === "1";
+
+function updateDiag() {
+  const element = $("layout-diag");
+  if (!element) return;
+  const root = document.documentElement;
+  const body = document.body;
+  const main = document.querySelector("main");
+  const innerWidth = window.innerWidth;
+  const innerHeight = window.innerHeight;
+
+  // Body/main can clip overflow (single-screen profile), so measure the
+  // element scroll extents too rather than only the document.
+  const verticalOverflow = Math.max(
+    0,
+    root.scrollHeight - innerHeight,
+    body.scrollHeight - innerHeight,
+    main ? main.scrollHeight - main.clientHeight : 0
+  );
+  const horizontalOverflow = Math.max(
+    0,
+    root.scrollWidth - innerWidth,
+    body.scrollWidth - innerWidth,
+    main ? main.scrollWidth - main.clientWidth : 0
+  );
+  const profile = (innerWidth < 1200 || innerHeight < 700)
+    ? "stacked"
+    : (innerHeight < 900 ? "compact" : "full");
+
+  element.dataset.profile = profile;
+  element.dataset.innerWidth = String(innerWidth);
+  element.dataset.innerHeight = String(innerHeight);
+  element.dataset.scrollWidth = String(Math.max(root.scrollWidth, body.scrollWidth));
+  element.dataset.scrollHeight = String(Math.max(root.scrollHeight, body.scrollHeight));
+  element.dataset.overflow = String(verticalOverflow);
+  element.dataset.horizontalOverflow = String(horizontalOverflow);
+
+  if (DIAG_ENABLED) {
+    element.hidden = false;
+    element.textContent = `${profile} ${innerWidth}x${innerHeight} `
+      + `vertical_overflow=${verticalOverflow} `
+      + `horizontal_overflow=${horizontalOverflow}`;
+  }
+}
+
+/* ------------------------------------------------------------- transport */
+
+function setTransport(online) {
+  const pill = $("link-pill");
+  if (pill) pill.className = online ? "pill pill-connected" : "pill pill-disconnected";
+  const text = $("link-text");
+  if (text) text.textContent = online ? "Console online" : "Dashboard offline";
+}
+
+function renderOffline() {
+  setTransport(false);
+  for (const dimension of SUPERVISION_DIMENSIONS) {
+    setSupervisionPill(dimension, "Offline", "unknown", []);
+  }
+  renderRobot("leader", null, "#38bdf8");
+  renderRobot("follower", null, "#fbbf24");
 }
 
 /* ------------------------------------------------------------- poll loop */
 
 const DEFAULT_INTERVAL_MS = 100;
 let pollTimer = null;
+let lastSnapshot = null;
 
 function render(data) {
   if (!data || data.ready === false) return;
-  renderOverview(data);
+  lastSnapshot = data;
+  setTransport(true);
+  renderSupervision(data);
   renderJoints(data);
   renderComms(data);
   renderCamera(data);
   renderEvents(data);
   renderRobot("leader", (data.streams || {}).leader, "#38bdf8");
   renderRobot("follower", (data.streams || {}).follower, "#fbbf24");
-
-  const tracking = data.tracking || {};
-  const leaderFoot = $("viz-foot-leader");
-  const followerFoot = $("viz-foot-follower");
-  const leader = (data.streams || {}).leader || {};
-  const follower = (data.streams || {}).follower || {};
-
-  if (leaderFoot) {
-    leaderFoot.textContent = leader.count
-      ? `${leader.joint_order ? leader.joint_order.length : 0} joints \u00b7 `
-        + `${fmtRate(leader.rate_hz)} \u00b7 age ${fmtAge(leader.age_ms)}`
-      : "awaiting telemetry";
-  }
-  if (followerFoot) {
-    followerFoot.textContent = tracking.available
-      ? `max |err| ${fmt(tracking.max_abs_error_rad * 1000, 1)} mrad \u00b7 `
-        + `RMS ${fmt(tracking.rms_error_rad * 1000, 1)} mrad`
-      : follower.count ? `${fmtRate(follower.rate_hz)} \u00b7 tracking unavailable`
-        : "awaiting telemetry";
-  }
+  renderRobotSummaries(data);
+  updateDiag();
 }
 
 async function poll() {
   let interval = DEFAULT_INTERVAL_MS;
+  let data = null;
   try {
     const response = await fetch("/api/state", { cache: "no-store" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.json();
-    render(data);
-    const configured = Number((data.config || {}).refresh_ms);
-    if (Number.isFinite(configured)) {
-      interval = Math.min(2000, Math.max(50, configured));
-    }
+    data = await response.json();
   } catch (error) {
-    const pill = $("link-pill");
-    pill.className = "pill pill-disconnected";
-    $("link-text").textContent = "Dashboard offline";
-    $("stat-system").textContent = "Dashboard offline";
-    $("stat-system").className = "stat-value state-disconnected";
-    $("stat-system-note").textContent = "cannot reach /api/state";
-    renderRobot("leader", null, "#38bdf8");
-    renderRobot("follower", null, "#fbbf24");
-  } finally {
+    if (session) session.notifyPoll(false);
+    renderOffline();
+    updateDiag();
     pollTimer = window.setTimeout(poll, interval);
+    return;
   }
+
+  if (session) session.notifyPoll(true);
+  try {
+    render(data);
+  } catch (error) {
+    // A rendering bug must not look like a transport failure.
+    console.error("render failed", error);
+    updateDiag();
+  }
+  const configured = Number((data.config || {}).refresh_ms);
+  if (Number.isFinite(configured)) {
+    interval = Math.min(2000, Math.max(50, configured));
+  }
+  pollTimer = window.setTimeout(poll, interval);
 }
 
 function start() {
-  const foot = $("foot-source");
-  if (foot) foot.textContent = "yam_sim_display dashboard \u00b7 read-only observer";
+  session = YAMSession.createSession({ inactivityS: 30 });
+  YAMSession.mount({
+    pill: $("sup-session"),
+    stripState: $("sup-session-state"),
+    timer: $("session-timer"),
+    start: $("session-start"),
+    pause: $("session-pause"),
+    resume: $("session-resume"),
+    end: $("session-end"),
+    summary: $("drawer-session"),
+  }, session);
+  bindDrawer();
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("selftest") === "1") YAMSession.runSelfTest();
+  // Diagnostic hook: opens the detail drawer so its DOM can be verified by a
+  // headless browser without simulating a click.
+  if (params.get("drawer") === "1") openDrawer("drawer-events-section");
   renderRobot("leader", null, "#38bdf8");
   renderRobot("follower", null, "#fbbf24");
+  updateDiag();
+  window.addEventListener("resize", updateDiag);
+  window.setTimeout(updateDiag, 0);
   poll();
 }
 
