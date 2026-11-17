@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<!--
+  Simulation description for the YAM leader/follower stack.
+
+  Reuses the real YAM geometry, inertials, materials and mesh visuals from
+  yam_description and attaches the kinematic mock hardware from
+  yam_ros2_control. No CAN device is opened: YAMHardwareInterface defaults to
+  use_mock_hardware=true and returns before any socket code runs.
+
+  joint7/joint8 (gripper fingers) are intentionally left out of the
+  ros2_control block: YAMHardwareInterface requires exactly six joints, each
+  with one position command interface and position+velocity state interfaces.
+  robot_state_publisher therefore keeps the fingers at their zero position,
+  so the gripper is static in this stage.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="yam_sim">
+
+  <xacro:include filename="$(find yam_description)/urdf/yam_joints.xacro"/>
+
+  <xacro:macro name="yam_sim_joint" params="id">
+    <joint name="joint_${id}">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- Real robot geometry: base, link1..link5, gripper, tip_left, tip_right. -->
+  <xacro:yam_links_and_joints/>
+
+  <ros2_control name="YAMSimMock" type="system">
+    <hardware>
+      <plugin>yam_ros2_control/YAMHardwareInterface</plugin>
+      <param name="use_mock_hardware">true</param>
+    </hardware>
+
+    <xacro:yam_sim_joint id="1"/>
+    <xacro:yam_sim_joint id="2"/>
+    <xacro:yam_sim_joint id="3"/>
+    <xacro:yam_sim_joint id="4"/>
+    <xacro:yam_sim_joint id="5"/>
+    <xacro:yam_sim_joint id="6"/>
+  </ros2_control>
+
+</robot>

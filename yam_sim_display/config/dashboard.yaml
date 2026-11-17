@@ -1,0 +1,53 @@
+# Operator dashboard configuration (Milestone 1, read-only).
+#
+# Every value below is declared by the dashboard node; this file only supplies
+# overrides on top of the defaults in dashboard/config.py.  Port and bind
+# address can additionally be overridden per launch:
+#
+#   ros2 launch yam_sim_display dashboard.launch.py port:=8081 bind_address:=0.0.0.0
+#
+# Binding to anything other than loopback exposes an unauthenticated read-only
+# page; restrict access at the network layer.
+
+yam_dashboard:
+  ros__parameters:
+
+    # Joint-state streams. These match both the simulation and the physical
+    # two-NUC rig, so no remapping is needed when moving to hardware.
+    leader_topic: "/leader/joint_states"
+    follower_topic: "/follower/joint_states"
+
+    # HTTP listener.
+    port: 8080
+    bind_address: "127.0.0.1"
+
+    # Browser poll interval (ms). 50-2000 are accepted.
+    refresh_ms: 100
+
+    # Message-age bands. A stream walks connected -> warning -> stale ->
+    # disconnected as its last message ages. Must satisfy
+    # warning < stale < disconnect.
+    freshness:
+      warning_ms: 250.0
+      stale_ms: 1000.0
+      disconnect_ms: 3000.0
+
+    diagnostics:
+      # Tracking error that raises an event (radians).
+      max_error_warn_rad: 0.15
+      rms_error_warn_rad: 0.10
+
+      # Expected publish-rate band for a 50 Hz source. Used only to flag
+      # unusual stream behaviour; it is not a latency measurement.
+      rate_min_hz: 30.0
+      rate_max_hz: 70.0
+      rate_window_s: 2.0
+
+      # A joint is reported as "static" when its commanded value has moved
+      # less than this over the session. Used to flag joints that are
+      # structurally constant in the current simulation.
+      static_joint_epsilon_rad: 0.001
+      static_joint_min_samples: 50
+
+    events:
+      max_entries: 200
