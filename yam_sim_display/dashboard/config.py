@@ -32,6 +32,7 @@ DEFAULTS: dict[str, Any] = {
     "diagnostics.static_joint_epsilon_rad": 0.001,
     "diagnostics.static_joint_min_samples": 50,
     "events.max_entries": 200,
+    "webrtc.enabled": False,
 }
 
 
@@ -53,6 +54,7 @@ class DashboardConfig:
     static_joint_epsilon_rad: float = DEFAULTS["diagnostics.static_joint_epsilon_rad"]
     static_joint_min_samples: int = DEFAULTS["diagnostics.static_joint_min_samples"]
     max_events: int = DEFAULTS["events.max_entries"]
+    webrtc_enabled: bool = DEFAULTS["webrtc.enabled"]
 
     @classmethod
     def from_parameter_dict(cls, values: Mapping[str, Any]) -> "DashboardConfig":
@@ -113,4 +115,5 @@ class DashboardConfig:
                 get("diagnostics.static_joint_min_samples")
             ),
             max_events=int(get("events.max_entries")),
+            webrtc_enabled=bool(get("webrtc.enabled")),
         )

@@ -1,0 +1,11 @@
+{
+  "signaling_url": "http://127.0.0.1:8080",
+  "cameras": {
+    "d405": {"host": "127.0.0.1", "port": 5000},
+    "d455f": {"host": "127.0.0.1", "port": 5002}
+  },
+  "poll_timeout_s": 10.0,
+  "keepalive_interval_s": 60.0,
+  "stats_interval_s": 1.0,
+  "run_dir": ""
+}

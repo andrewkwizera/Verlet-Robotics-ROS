@@ -35,6 +35,7 @@ from .http_server import ServerThread
 from .state_cache import StateCache
 from .supervision import SUPERVISION_DEFAULTS, SupervisionConfig, Supervisor
 from .telemetry import TelemetryStore
+from .webrtc_signaling import SignalingStore
 
 # Derived-state evaluation is decoupled from the browser poll interval so a
 # slow refresh rate cannot hide a freshness transition.
@@ -97,11 +98,14 @@ class DashboardNode(Node):
         self._lock = threading.Lock()
         self._reported_first = {"leader": False, "follower": False}
 
+        # M3 signaling is independent of ROS state and disabled by default.
+        self.signaling = SignalingStore() if self.config.webrtc_enabled else None
         self._server = ServerThread(
             self.cache,
             self.config.bind_address,
             self.config.port,
             web_dir,
+            self.signaling,
         )
         self._server.start()
         self._running = True
@@ -118,11 +122,18 @@ class DashboardNode(Node):
             "(no safety input -> Unknown)"
         )
         if self.config.bind_address not in ("127.0.0.1", "localhost", "::1"):
-            self.get_logger().warning(
-                f"Dashboard bound to {self.config.bind_address}; it is "
-                "unauthenticated and read-only, so restrict access at the "
-                "network layer."
-            )
+            if self.signaling is None:
+                self.get_logger().warning(
+                    f"Dashboard bound to {self.config.bind_address}; it is "
+                    "unauthenticated and read-only, so restrict access at the "
+                    "network layer."
+                )
+            else:
+                self.get_logger().warning(
+                    f"Dashboard bound to {self.config.bind_address}; "
+                    "telemetry is read-only but WebRTC signaling is "
+                    "unauthenticated, so restrict access at the network layer."
+                )
 
     # -- ROS callbacks ------------------------------------------------------
 

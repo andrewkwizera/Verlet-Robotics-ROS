@@ -51,3 +51,11 @@ yam_dashboard:
 
     events:
       max_entries: 200
+
+    # Milestone 3 WebRTC signaling (research prototype).
+    # Disabled by default: M2 behavior is unchanged until explicitly enabled.
+    # The listener is controlled by `bind_address` above; keep it on loopback
+    # for local development and set it to the VPN interface address on the NUC.
+    # Signaling has no authentication and no TLS: do not expose it publicly.
+    webrtc:
+      enabled: false
