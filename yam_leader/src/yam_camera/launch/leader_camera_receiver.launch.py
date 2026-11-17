@@ -10,6 +10,13 @@ from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 
 
+def gstreamer_env():
+    """Keep tracing/debug logging out of the GStreamer subprocesses."""
+    blocked = {'GST_TRACERS', 'GST_DEBUG', 'GST_DEBUG_FILE'}
+    return {key: value for key, value in os.environ.items()
+            if key not in blocked}
+
+
 def load_settings():
     """Load public defaults, then apply optional machine-local settings."""
     package_dir = get_package_share_directory('yam_camera')
@@ -48,11 +55,12 @@ def receiver_process(name, enabled, port):
         name=name,
         condition=IfCondition(LaunchConfiguration(enabled)),
         output='screen',
+        env=gstreamer_env(),
         respawn=True,
         respawn_delay=2.0,
         respawn_max_retries=5,
         cmd=[
-            'gst-launch-1.0', '-e', '-v',
+            'gst-launch-1.0', '-e',
             'udpsrc', ['port=', LaunchConfiguration(port)],
             rtp_caps,
             '!', 'rtpjitterbuffer',

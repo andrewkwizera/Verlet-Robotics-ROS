@@ -10,6 +10,13 @@ from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 
 
+def gstreamer_env():
+    """Keep tracing/debug logging out of the GStreamer subprocesses."""
+    blocked = {'GST_TRACERS', 'GST_DEBUG', 'GST_DEBUG_FILE'}
+    return {key: value for key, value in os.environ.items()
+            if key not in blocked}
+
+
 def load_settings():
     """Load public defaults, then apply optional machine-local settings."""
     package_dir = get_package_share_directory('yam_camera')
@@ -49,11 +56,12 @@ def sender_process(name, enabled, device, port):
         name=name,
         condition=IfCondition(LaunchConfiguration(enabled)),
         output='screen',
+        env=gstreamer_env(),
         respawn=True,
         respawn_delay=2.0,
         respawn_max_retries=5,
         cmd=[
-            'gst-launch-1.0', '-e', '-v',
+            'gst-launch-1.0', '-e',
             'v4l2src', ['device=', LaunchConfiguration(device)],
             'do-timestamp=true',
             '!', caps,
@@ -84,6 +92,8 @@ def generate_launch_description():
     video = settings['video']
     network = settings['network']
 
+    # Force the new 60 FPS defaults even when an old cameras.local.yaml is present.
+    # Launch arguments can still explicitly override these values.
     arguments = [
         DeclareLaunchArgument('enable_d405', default_value='true'),
         DeclareLaunchArgument('enable_d455f', default_value='true'),
@@ -92,9 +102,9 @@ def generate_launch_description():
         DeclareLaunchArgument('d405_port', default_value=str(cameras['d405']['port'])),
         DeclareLaunchArgument('d455f_port', default_value=str(cameras['d455f']['port'])),
         DeclareLaunchArgument('leader_ip', default_value=network['leader_ip']),
-        DeclareLaunchArgument('width', default_value=str(video['width'])),
-        DeclareLaunchArgument('height', default_value=str(video['height'])),
-        DeclareLaunchArgument('fps', default_value=str(video['fps'])),
+        DeclareLaunchArgument('width', default_value='848'),
+        DeclareLaunchArgument('height', default_value='480'),
+        DeclareLaunchArgument('fps', default_value='60'),
         DeclareLaunchArgument('bitrate_kbps', default_value=str(video['bitrate_kbps'])),
         DeclareLaunchArgument(
             'keyframe_interval', default_value=str(video['keyframe_interval'])),

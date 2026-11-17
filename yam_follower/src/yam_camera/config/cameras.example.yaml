@@ -9,11 +9,11 @@ cameras:
     port: 5002
 
 video:
-  width: 1280
-  height: 720
-  fps: 30
+  width: 848
+  height: 480
+  fps: 60
   bitrate_kbps: 4000
-  keyframe_interval: 30
+  keyframe_interval: 60
 
 network:
   # TEST-NET-1 example address. Replace it in cameras.local.yaml.
