@@ -423,13 +423,23 @@ class HttpTransportTests(unittest.TestCase):
 
     def test_post_is_refused(self):
         status, _ = self.request("POST", "/api/state", b"{}")
-        self.assertEqual(status, 501)
+        self.assertEqual(status, 405)
 
-    def test_put_and_delete_are_refused(self):
-        for method in ("PUT", "DELETE", "PATCH"):
+    def test_put_and_patch_are_refused(self):
+        for method in ("PUT", "PATCH"):
             with self.subTest(method=method):
                 status, _ = self.request(method, "/api/state", b"{}")
                 self.assertEqual(status, 501)
+
+    def test_delete_is_refused(self):
+        status, _ = self.request("DELETE", "/api/state")
+        self.assertEqual(status, 405)
+
+    def test_webrtc_routes_are_absent_when_disabled(self):
+        status, _ = self.request("GET", "/api/webrtc/offer?session_id=x&camera_id=d405")
+        self.assertEqual(status, 404)
+        status, _ = self.request("POST", "/api/webrtc/session", b"{}")
+        self.assertEqual(status, 404)
 
     def test_head_is_not_a_state_endpoint(self):
         status, _ = self.request("HEAD", "/")
@@ -511,7 +521,7 @@ class StaticReadOnlyAuditTests(unittest.TestCase):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
             and node.name.startswith("do_")
         }
-        self.assertEqual(handlers, {"do_GET", "do_HEAD"})
+        self.assertEqual(handlers, {"do_GET", "do_HEAD", "do_POST", "do_DELETE"})
 
     def test_node_merges_supervision_additively(self):
         source = read(os.path.join(_PACKAGE_ROOT, "dashboard", "node.py"))

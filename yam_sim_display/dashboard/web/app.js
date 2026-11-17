@@ -1,4 +1,4 @@
-/* YAM Operator Console — Milestone 2 (read-only supervision).
+/* YAM Operator Console — read-only supervision.
  *
  * Presentation layer only. It consumes the JSON snapshot produced by the ROS
  * node and never speaks to ROS directly. The four supervision dimensions are
@@ -452,7 +452,7 @@ function renderJoints(data) {
 
   const note = $("joint-note");
   if (tracking.available && tracking.note) {
-    note.innerHTML = `<strong>Limitation:</strong> ${tracking.note}`;
+    note.innerHTML = `<strong>Note:</strong> ${tracking.note}`;
   } else if (tracking.available) {
     note.textContent = "Error is computed per joint as leader \u2212 follower.";
   } else {
@@ -519,14 +519,59 @@ function renderComms(data) {
 
 /* ---------------------------------------------------------------- camera */
 
+const WEBRTC_CAMERAS = ["d405", "d455f"];
+const WEBRTC_INACTIVE_PHASES = [
+  "starting", "checking-signaling", "disabled", "stopped",
+];
+
+let webrtcController = null;
+let webrtcVisible = false;
+let webrtcSummary = null;
+
+function setCameraBadge(label, warning) {
+  setText("camera-badge", label);
+  const badge = $("camera-badge");
+  if (badge) badge.className = warning ? "badge badge-warn" : "badge";
+}
+
 function renderCamera(data) {
-  const camera = data.camera || {};
+  const camera = (data && data.camera) || {};
+  const frame = $("camera-frame");
+  const webrtcFrame = $("camera-webrtc");
   const pending = $("camera-pending");
   const mount = $("camera-mount");
 
-  setText("camera-title", camera.title || "Camera feed pending");
-  setText("camera-reason", camera.reason || "");
+  // WebRTC status is presentation-only. It never feeds /api/state,
+  // supervision, readiness, safety or the operator session.
+  if (frame) frame.hidden = webrtcVisible;
+  if (webrtcFrame) webrtcFrame.hidden = !webrtcVisible;
 
+  if (webrtcVisible) {
+    if (pending) pending.hidden = true;
+    if (mount) mount.hidden = true;
+    const entries = (webrtcSummary && webrtcSummary.cameras) || {};
+    const liveCount = WEBRTC_CAMERAS.filter(
+      (id) => entries[id] && entries[id].live
+    ).length;
+    const phase = webrtcSummary ? webrtcSummary.phase : "starting";
+    if (liveCount === WEBRTC_CAMERAS.length) {
+      setCameraBadge("Live", false);
+    } else if (phase === "start-failed" || phase === "session-expired") {
+      setCameraBadge("Unavailable", true);
+    } else if (liveCount > 0) {
+      setCameraBadge("Partial", true);
+    } else {
+      setCameraBadge("Connecting", true);
+    }
+    return;
+  }
+
+  // Existing fallback: unchanged when WebRTC signaling is disabled.
+  setText("camera-title", "Camera feed unavailable");
+  setText(
+    "camera-reason",
+    "Connect the video gateway to show D405 and D455f feeds."
+  );
   if (camera.stream_url) {
     if (pending) pending.hidden = true;
     if (mount) {
@@ -538,16 +583,111 @@ function renderCamera(data) {
         mount.appendChild(img);
       }
     }
-    setText("camera-badge", "Live");
-    const badge = $("camera-badge");
-    if (badge) badge.className = "badge";
+    setCameraBadge("Live", false);
   } else {
     if (pending) pending.hidden = false;
     if (mount) mount.hidden = true;
-    setText("camera-badge", camera.state === "pending" ? "Pending" : "Unavailable");
-    const badge = $("camera-badge");
-    if (badge) badge.className = "badge badge-warn";
+    setCameraBadge(
+      camera.state === "pending" ? "Pending" : "Unavailable", true
+    );
   }
+}
+
+function renderWebRTCCamera(id, entry, phase) {
+  const panel = $(`webrtc-panel-${id}`);
+  if (!panel) return;
+  const browser = (entry && entry.browser) || {};
+  const gateway = (entry && entry.gateway) || {};
+  const gatewayStats = gateway.stats || {};
+  const decoded = Number(browser.framesDecoded || 0);
+  const live = Boolean(entry && entry.live && decoded > 0);
+  const state = $(`webrtc-state-${id}`);
+  const stateText = live ? "live"
+    : (entry && entry.error ? "error"
+      : ((entry && entry.connectionState) || "waiting"));
+
+  setText(`webrtc-state-${id}`, stateText);
+  if (state) {
+    state.className = `webrtc-state ${live ? "state-connected"
+      : (entry && entry.error ? "state-disconnected" : "state-stale")}`;
+  }
+
+  const pt = gatewayStats.negotiated_pt === undefined
+    || gatewayStats.negotiated_pt === null ? "\u2014" : gatewayStats.negotiated_pt;
+  const lines = [
+    `browser \u00b7 ${decoded} frames \u00b7 ${browser.packetsReceived || 0} packets`,
+    `gateway \u00b7 ${gateway.health || "unknown"} \u00b7 `
+      + `${gatewayStats.ingress_packets || 0} packets \u00b7 PT ${pt}`,
+  ];
+  if (entry && entry.error) {
+    lines.push(entry.error);
+  } else if (!entry || !entry.answerApplied) {
+    lines.push("waiting for gateway answer");
+  } else if (!live) {
+    lines.push("answer applied; waiting for RTP");
+  }
+  setText(`webrtc-detail-${id}`, lines.join("\n"));
+
+  const retry = $(`webrtc-retry-${id}`);
+  if (retry) retry.disabled = phase !== "session-active";
+}
+
+function renderWebRTC(snap) {
+  webrtcSummary = snap || { phase: "starting", cameras: {} };
+  webrtcVisible = !WEBRTC_INACTIVE_PHASES.includes(webrtcSummary.phase);
+  for (const id of WEBRTC_CAMERAS) {
+    renderWebRTCCamera(
+      id,
+      ((webrtcSummary.cameras || {})[id] || {}),
+      webrtcSummary.phase
+    );
+  }
+  renderCamera(lastSnapshot || {});
+}
+
+window.__YAM_WEBRTC__ = {
+  snapshot() {
+    return webrtcController
+      ? webrtcController.snapshot()
+      : { phase: "starting", cameras: {} };
+  },
+  retry(id) {
+    if (!webrtcController) return Promise.reject(new Error("client not ready"));
+    // Best effort for the selected camera only; sender restart is the
+    // verified independent recovery path.
+    return webrtcController.retry(id);
+  },
+  restartAll() {
+    if (!webrtcController) return Promise.reject(new Error("client not ready"));
+    return webrtcController.restartAll();
+  },
+};
+window.__YAM_WEBRTC_READY__ = false;
+
+function startWebRTC() {
+  if (webrtcController || !window.YAMWebRTC) return;
+  webrtcController = window.YAMWebRTC.createController({
+    cameras: WEBRTC_CAMERAS,
+    getVideo: (id) => $(`webrtc-video-${id}`),
+    onChange: renderWebRTC,
+  });
+
+  for (const id of WEBRTC_CAMERAS) {
+    const button = $(`webrtc-retry-${id}`);
+    if (button) {
+      button.addEventListener("click", () => {
+        window.__YAM_WEBRTC__.retry(id).catch(() => {
+          renderWebRTC(webrtcController.snapshot());
+        });
+      });
+    }
+  }
+
+  renderWebRTC(webrtcController.snapshot());
+  window.__YAM_WEBRTC_READY__ = true;
+  webrtcController.start().catch(() => {
+    renderWebRTC(webrtcController.snapshot());
+  });
 }
 
 /* ------------------------------------------------------------ supervision */
@@ -809,7 +949,7 @@ function renderSafetyDetail(safety) {
   const required = $("drawer-safety-required");
   if (explanation) {
     explanation.textContent = safety.explanation
-      || "Safety status is input-driven; the dashboard cannot certify safety.";
+      || "Depends on external safety inputs; this console does not certify safety.";
   }
   if (required) {
     required.textContent = safety.required_input || "";
@@ -1179,6 +1319,7 @@ function start() {
     summary: $("drawer-session"),
   }, session);
   bindDrawer();
+  startWebRTC();
   const params = new URLSearchParams(window.location.search);
   if (params.get("selftest") === "1") YAMSession.runSelfTest();
   // Diagnostic hook: opens the detail drawer so its DOM can be verified by a

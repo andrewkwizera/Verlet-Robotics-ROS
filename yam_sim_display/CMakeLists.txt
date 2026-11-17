@@ -30,6 +30,22 @@ install(
     PATTERN "*.js"
 )
 
+# --- Standalone WebRTC gateway (Milestone 3, Phase 1c) ----------------------
+# Separate from rclpy: installed as a normal executable under lib/ with the
+# importable gateway package under share/ so run.py works from an install tree.
+install(
+  PROGRAMS gateway/run.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME webrtc_gateway
+)
+
+install(
+  DIRECTORY gateway/
+  DESTINATION share/${PROJECT_NAME}/gateway
+  FILES_MATCHING
+    PATTERN "*.py"
+)
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # Skip copyright/cpplint checks: launch-only package with no C++ sources.

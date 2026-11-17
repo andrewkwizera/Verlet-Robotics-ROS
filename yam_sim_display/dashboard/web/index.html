@@ -30,14 +30,14 @@
       <span class="sup-count" id="sup-readiness-count" hidden></span>
     </button>
     <button class="sup-pill sup-unknown" id="sup-safety" data-dimension="safety" type="button"
-            aria-haspopup="dialog" title="Safety status (input-driven)">
+            aria-haspopup="dialog" title="Safety status">
       <span class="sup-label">Safety</span>
       <span class="dot" aria-hidden="true"></span>
       <span class="sup-state" id="sup-safety-state" aria-live="polite">&mdash;</span>
       <span class="sup-count" id="sup-safety-count" hidden></span>
     </button>
     <button class="sup-pill sup-unknown" id="sup-session" data-dimension="session" type="button"
-            aria-haspopup="dialog" title="Operator session (this console only)">
+            aria-haspopup="dialog" title="Console session">
       <span class="sup-label">Session</span>
       <span class="dot" aria-hidden="true"></span>
       <span class="sup-state" id="sup-session-state" aria-live="polite">Idle</span>
@@ -55,7 +55,7 @@
     <span class="pill pill-unknown" id="link-pill">
       <span class="dot"></span><span id="link-text">Connecting</span>
     </span>
-    <span class="badge">Milestone 2 &middot; read-only</span>
+    <span class="badge">Read-only</span>
   </div>
 </header>
 
@@ -65,7 +65,7 @@
   <section class="card card-robots" id="card-robots" aria-label="Robot visualization">
     <div class="card-head">
       <h2>Robot visualization</h2>
-      <span class="sub">Live joint-space projection</span>
+      <span class="sub">Joint space</span>
     </div>
     <div class="robot-stack">
       <div class="robot-panel" id="panel-leader">
@@ -97,13 +97,39 @@
       <h2>Camera</h2>
       <span class="badge badge-warn" id="camera-badge">Pending</span>
     </div>
-    <div class="camera-frame">
+    <div class="camera-frame" id="camera-frame">
       <div class="camera-pending" id="camera-pending">
         <div class="camera-glyph" aria-hidden="true">&#9673;</div>
         <h3 id="camera-title">Camera feed pending</h3>
         <p id="camera-reason">&nbsp;</p>
       </div>
       <div class="camera-mount" id="camera-mount" hidden></div>
+    </div>
+
+    <!-- Independent WebRTC views; hidden until signaling is enabled. -->
+    <div class="camera-webrtc" id="camera-webrtc" hidden>
+      <section class="webrtc-panel" id="webrtc-panel-d405" aria-label="D405 WebRTC feed">
+        <div class="webrtc-head">
+          <span class="webrtc-name">D405</span>
+          <span class="webrtc-state" id="webrtc-state-d405">waiting</span>
+        </div>
+        <video class="webrtc-video" id="webrtc-video-d405" autoplay playsinline muted
+               aria-label="Live D405 WebRTC video feed"></video>
+        <p class="webrtc-detail" id="webrtc-detail-d405">Waiting for session.</p>
+        <button class="webrtc-retry" id="webrtc-retry-d405" type="button"
+                title="Retry D405 only">Retry D405</button>
+      </section>
+      <section class="webrtc-panel" id="webrtc-panel-d455f" aria-label="D455f WebRTC feed">
+        <div class="webrtc-head">
+          <span class="webrtc-name">D455f</span>
+          <span class="webrtc-state" id="webrtc-state-d455f">waiting</span>
+        </div>
+        <video class="webrtc-video" id="webrtc-video-d455f" autoplay playsinline muted
+               aria-label="Live D455f WebRTC video feed"></video>
+        <p class="webrtc-detail" id="webrtc-detail-d455f">Waiting for session.</p>
+        <button class="webrtc-retry" id="webrtc-retry-d455f" type="button"
+                title="Retry D455f only">Retry D455f</button>
+      </section>
     </div>
   </section>
 
@@ -179,7 +205,7 @@
   <header class="drawer-head">
     <div>
       <h2 id="drawer-title">Supervision detail</h2>
-      <p class="drawer-sub">Reasons, prerequisites and full event history</p>
+      <p class="drawer-sub">Reasons, checks and events</p>
     </div>
     <button class="drawer-close" id="drawer-close" type="button"
             aria-label="Close supervision detail">&times;</button>
@@ -201,7 +227,7 @@
           <tbody></tbody>
         </table>
       </div>
-      <h4 class="drawer-subhead">Diagnostics &mdash; not prerequisites</h4>
+      <h4 class="drawer-subhead">Diagnostics (non-blocking)</h4>
       <div id="drawer-diagnostics" class="drawer-diagnostics"></div>
     </section>
 
@@ -242,6 +268,7 @@
 <div id="session-selftest" hidden aria-hidden="true" data-selftest=""></div>
 
 <script src="/session.js"></script>
+<script src="/webrtc_client.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

@@ -61,6 +61,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.follower_topic, "/follower/joint_states")
         self.assertEqual(config.port, 8080)
         self.assertEqual(config.bind_address, "127.0.0.1")
+        self.assertFalse(config.webrtc_enabled)
         self.assertLess(config.warning_s, config.stale_s)
         self.assertLess(config.stale_s, config.disconnect_s)
 
