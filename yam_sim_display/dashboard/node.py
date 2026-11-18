@@ -29,8 +29,10 @@ from rclpy.qos import (
     ReliabilityPolicy,
 )
 from sensor_msgs.msg import JointState
+from std_msgs.msg import String
 
 from .config import DEFAULTS, DashboardConfig
+from .bridge_status import BridgeStatusMonitor
 from .http_server import ServerThread
 from .state_cache import StateCache
 from .supervision import SUPERVISION_DEFAULTS, SupervisionConfig, Supervisor
@@ -71,6 +73,7 @@ class DashboardNode(Node):
         )
 
         self.store = TelemetryStore(self.config)
+        self.bridge_status = BridgeStatusMonitor()
         self.cache = StateCache()
         # Milestone 2 ships no safety adapter: safety is Unknown, never Normal.
         self.supervisor = Supervisor(
@@ -91,6 +94,13 @@ class DashboardNode(Node):
             self.config.follower_topic,
             lambda msg: self._on_joint_state("follower", msg),
             qos,
+        )
+
+        # Read-only physical tracking status from the follower bridge.
+        # No publishers, services, or robot commands are created here.
+        self.create_subscription(
+            String, "/yam_teleop/status", self._on_bridge_status,
+            QoSProfile(depth=5, reliability=ReliabilityPolicy.BEST_EFFORT),
         )
 
         self.create_timer(EVALUATE_PERIOD_S, self._tick)
@@ -160,6 +170,9 @@ class DashboardNode(Node):
                     f"({len(msg.name)} joints) from {topic}"
                 )
 
+    def _on_bridge_status(self, msg: String) -> None:
+        self.bridge_status.update(msg.data)
+
     def _tick(self) -> None:
         if not self._running:
             return
@@ -172,6 +185,7 @@ class DashboardNode(Node):
         merged = dict(telemetry)
         merged["schema"] = 2
         merged["supervision"] = supervision
+        merged["robot_control"] = self.bridge_status.snapshot(now)
         merged["events"] = self.store.events.snapshot()
         self.cache.publish(merged)
 

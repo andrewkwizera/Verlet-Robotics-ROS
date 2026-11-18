@@ -30,6 +30,7 @@
        HTTP transport; only rclpy and sensor_msgs are required at runtime. -->
   <exec_depend>rclpy</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
 
   <exec_depend>yam_description</exec_depend>
   <exec_depend>yam_ros2_control</exec_depend>

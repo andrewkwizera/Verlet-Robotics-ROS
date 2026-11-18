@@ -511,6 +511,42 @@ function renderComms(data) {
     body.appendChild(tr);
   }
 
+
+  // Actual follower bridge status (read-only).
+  // Never display tracking as armed when the status is stale.
+  const bridge = data.robot_control || {};
+  const bridgeFresh = bridge.available === true && bridge.fresh === true;
+
+  setText("bridge-tracking", bridgeFresh
+    ? (bridge.tracking === "ENABLED" ? "Tracking armed"
+      : bridge.tracking === "DISABLED" ? "Tracking disarmed" : "Unknown")
+    : "Unavailable — no fresh bridge status");
+
+  const detail = $("bridge-detail");
+
+  if (detail) {
+    if (!bridgeFresh) {
+      detail.textContent =
+        bridge.reason || "Waiting for follower bridge status";
+    } else {
+      const author = bridge.actuation_authorized
+        ? "authorized" : "read-only";
+
+      const reason = bridge.last_disarm_reason || "none";
+
+      const gap = Number.isFinite(bridge.max_separation_rad)
+        ? `${fmt(bridge.max_separation_rad, 3)} rad`
+        : "unavailable";
+
+      detail.textContent =
+        `Actuation: ${author} · Leader: ${bridge.leader} · ` +
+        `Follower: ${bridge.follower} · Separation: ${gap}` +
+        (reason !== "none" ? ` · Last disarm: ${reason}` : "");
+    }
+  }
+
+
+
   $("latency-display").textContent = (data.latency || {}).display
     || "Unavailable \u2014 no valid latency measurement source";
   const latencyReason = $("latency-reason");

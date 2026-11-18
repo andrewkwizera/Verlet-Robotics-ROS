@@ -480,26 +480,29 @@ class StaticReadOnlyAuditTests(unittest.TestCase):
             tree = parse_python(os.path.join(_PACKAGE_ROOT, "dashboard", name))
             self.assertFalse(imported_modules(tree) & self.ROS_MODULES, name)
 
-    def test_node_never_publishes_and_only_reads_joint_states(self):
+    def test_node_never_publishes_and_only_reads_telemetry(self):
         tree = parse_python(os.path.join(_PACKAGE_ROOT, "dashboard", "node.py"))
         self.assertEqual(attribute_calls(tree, "create_publisher"), [])
 
         subscriptions = attribute_calls(tree, "create_subscription")
-        self.assertEqual(len(subscriptions), 2)
+        self.assertEqual(len(subscriptions), 3)
         topics = sorted(ast.unparse(call.args[1]) for call in subscriptions)
+        self.assertEqual(topics, [
+            "'/yam_teleop/status'", "self.config.follower_topic",
+            "self.config.leader_topic",
+        ])
         self.assertEqual(
-            topics, ["self.config.follower_topic", "self.config.leader_topic"]
+            sorted(ast.unparse(call.args[0]) for call in subscriptions),
+            ["JointState", "JointState", "String"],
         )
-        for call in subscriptions:
-            self.assertEqual(ast.unparse(call.args[0]), "JointState")
-
+        self.assertEqual(attribute_calls(tree, "create_client"), [])
         literals = " ".join(non_docstring_literals(tree))
-        for forbidden in ("/yam_teleop", "cmd_vel", "joint_command"):
+        for forbidden in ("/yam_teleop/enable_tracking", "cmd_vel", "joint_command"):
             self.assertNotIn(forbidden, literals)
 
     def test_no_command_topics_anywhere_in_dashboard(self):
         forbidden = (
-            "/yam_teleop/status", "/cmd_vel", "/joint_command",
+            "/yam_teleop/enable_tracking", "/cmd_vel", "/joint_command",
             "/forward_position_controller/commands",
         )
         for root, _dirs, files in os.walk(os.path.join(_PACKAGE_ROOT, "dashboard")):
