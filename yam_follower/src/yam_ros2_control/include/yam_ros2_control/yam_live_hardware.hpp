@@ -57,8 +57,6 @@ private:
   std::array<double,N> velocities_{};
   std::array<double,N> commands_{};
   std::array<double,N> startup_hold_{};
-  // Persistent joint-space servo target; never reset it to measured feedback each cycle.
-  std::array<double,N> follower_setpoint_{};
   std::array<double,N> raw_unwrapped_{};
   std::array<double,N> raw_last_{};
   std::array<bool,N> unwrapped_ready_{};
@@ -75,9 +73,6 @@ private:
   // at its zero-opening (closed) configuration; never ignore its inertia.
   std::array<KDL::Chain, 2> finger_chains_;
   std::array<std::unique_ptr<KDL::ChainFkSolverPos_recursive>, 2> finger_fk_;
-  double follow_speed_limit_ = 0.25;  // rad/s; configurable only at startup
-  static constexpr double FOLLOW_ACCEL_LIMIT = 2.0;  // rad/s^2, conservative ramp
-  std::array<double, N> follower_speed_{ };
   std::string role_, channel_;
   bool initialized_ = false;
   bool active_ = false;

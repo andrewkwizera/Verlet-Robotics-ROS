@@ -4,7 +4,6 @@ Follower motor commands never have to cross the network.
 """
 import os
 import subprocess
-import math
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -25,11 +24,6 @@ def setup(context):
         'launch',
         'follower_camera_sender.launch.py',
     )
-
-    speed_string = LaunchConfiguration('follower_speed').perform(context)
-    speed = float(speed_string)
-    if not math.isfinite(speed) or not 0.05 <= speed <= 0.50:
-        raise ValueError('follower_speed must be finite in 0.05..0.50 rad/s')
 
     allow = LaunchConfiguration('allow_actuation').perform(context)
     calibrated = LaunchConfiguration('calibration_verified').perform(context)
@@ -53,7 +47,6 @@ def setup(context):
         'allow_actuation:=' + allow,
         'calibration_verified:=' + calibrated,
         'emergency_stop_verified:=' + estop,
-        'follower_speed:=' + speed_string,
     ]
     for j in range(1, 7):
         args.append('offset_' + str(j) + ':=' +
@@ -79,8 +72,7 @@ def setup(context):
         Node(package='yam_teleop_cpp', executable='yam_live_bridge',
              name='yam_live_bridge', output='screen',
              parameters=[{'actuation_authorized': authorized,
-                          'auto_track': auto_track.strip().lower() in ('true','1'),
-                          'follower_speed': speed}]),
+                          'auto_track': auto_track.strip().lower() in ('true','1')}]),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(camera_launch),
             condition=IfCondition(LaunchConfiguration('enable_cameras')),
@@ -101,8 +93,6 @@ def generate_launch_description():
                               description='Affirm verified independent emergency stop'),
         DeclareLaunchArgument('auto_track', default_value='false',
                               description='Auto-arm bridge once leader and follower align'),
-        DeclareLaunchArgument('follower_speed', default_value='0.25',
-                              description='rad/s, requires load-specific physical commissioning'),
         DeclareLaunchArgument('enable_cameras', default_value='false',
                               description='Start both follower camera sender processes'),
         DeclareLaunchArgument('enable_d405', default_value='true',

@@ -51,12 +51,6 @@ hardware_interface::CallbackReturn YAMLiveHardware::on_init(
                                "; expected can0 or can1");
     }
     allow_actuation_ = yes(info_.hardware_parameters.at("allow_actuation"));
-    follow_speed_limit_ = std::stod(info_.hardware_parameters.at("follower_speed"));
-    if (!std::isfinite(follow_speed_limit_) ||
-        follow_speed_limit_ < 0.05 || follow_speed_limit_ > 0.50) {
-      throw std::runtime_error(
-        "follower_speed must be 0.05..0.50 rad/s; this is a software command limit, not a verified safe motor speed");
-    }
     calibrated_ = yes(info_.hardware_parameters.at("calibration_verified"));
     estop_confirmed_ = yes(info_.hardware_parameters.at("emergency_stop_verified"));
     for (std::size_t i = 0; i < N; ++i) {
@@ -78,7 +72,6 @@ hardware_interface::CallbackReturn YAMLiveHardware::on_init(
     positions_.fill(std::numeric_limits<double>::quiet_NaN());
     commands_.fill(std::numeric_limits<double>::quiet_NaN());
     velocities_.fill(0.0);
-    follower_speed_.fill(0.0);
     unwrapped_ready_.fill(false);
     motor_enabled_.fill(false);
     registers_ = std::make_unique<YAMCanRegisterReader>(channel_);
@@ -339,8 +332,6 @@ hardware_interface::CallbackReturn YAMLiveHardware::on_activate(
     }
     commands_ = positions_; // hold ACTUAL measured position, not arbitrary zero
     startup_hold_ = positions_;
-    follower_setpoint_ = positions_;
-    follower_speed_.fill(0.0);
     follower_command_seen_ = false;
     if (!allow_actuation_) {
       active_ = true;
@@ -381,8 +372,6 @@ hardware_interface::CallbackReturn YAMLiveHardware::on_activate(
     }
     commands_ = positions_;
     startup_hold_ = positions_;
-    follower_setpoint_ = positions_;
-    follower_speed_.fill(0.0);
     follower_command_seen_ = false;
     last_cycle_ = std::chrono::steady_clock::now();
     active_ = true;
@@ -418,15 +407,12 @@ hardware_interface::return_type YAMLiveHardware::perform_command_mode_switch(
     follower_command_seen_ = false;
     if (active_) {
       startup_hold_ = positions_;
-      follower_setpoint_ = positions_;
-      follower_speed_.fill(0.0);
     }
   }
   if (std::find(start_interfaces.begin(), start_interfaces.end(), first_joint) !=
       start_interfaces.end()) {
     follower_controller_claimed_ = true;
     follower_command_seen_ = false;
-    follower_speed_.fill(0.0);
     follower_command_ready_at_ = std::chrono::steady_clock::now() +
       std::chrono::milliseconds(300);
     RCLCPP_INFO(logger(), "Follower controller claimed position interfaces; startup hold continues for 300 ms");
@@ -489,8 +475,6 @@ hardware_interface::return_type YAMLiveHardware::write(
           }
         }
         if (aligned) {
-          follower_setpoint_ = positions_;  // begin commanded trajectory at physical pose
-          follower_speed_.fill(0.0);
           follower_command_seen_ = true;
           RCLCPP_INFO(logger(), "Follower accepted aligned ROS position-controller commands");
         }
@@ -499,14 +483,8 @@ hardware_interface::return_type YAMLiveHardware::write(
         throw std::runtime_error("Follower commanded target outside joint limits");
       const auto &requested = follower_command_seen_ ? commands_ : startup_hold_;
       for (std::size_t i=0; i<N; ++i) {
-        // TWO different quantities must not be confused:
-        //   requested - measured: whole-loop tracking error (fault guard)
-        //   requested - setpoint: remaining distance in the commanded trajectory
-        // The previous implementation reset the target to measured + 0.005 rad
-        // EVERY 20-ms cycle; that capped the motor's proportional correction to
-        // ~0.4 Nm (large joints) or ~0.05 Nm (small joints) and the follower
-        // could drift instead of moving toward the leader. Here, the target
-        // progresses cumulatively at a bounded joint speed.
+        // Position mirroring without software speed/acceleration trajectory
+        // shaping. Retain the existing independent feedback-error fault guard.
         const double error = requested[i] - positions_[i];
         if (!std::isfinite(error) || std::abs(error) > MAX_FOLLOW_ERROR) {
           throw std::runtime_error("Follower position error on joint " +
@@ -515,36 +493,12 @@ hardware_interface::return_type YAMLiveHardware::write(
             " error=" + std::to_string(error) +
             " (limit=" + std::to_string(MAX_FOLLOW_ERROR) + " rad)");
         }
-        // Speed and acceleration are bounded; velocity feedforward is sent
-        // to the MIT servo rather than always asking for zero velocity.
-        const double remaining = requested[i] - follower_setpoint_[i];
-        const double requested_speed = std::clamp(
-          remaining / dt, -follow_speed_limit_, follow_speed_limit_);
-        const double dv = std::clamp(
-          requested_speed - follower_speed_[i],
-          -FOLLOW_ACCEL_LIMIT * dt, FOLLOW_ACCEL_LIMIT * dt);
-        double next_speed = follower_speed_[i] + dv;
-        double advance = next_speed * dt;
-        // Never advance *away* from the new target after a sudden reversal,
-        // nor overshoot the requested position during deceleration.
-        if (remaining == 0.0 || (advance != 0.0 &&
-            std::signbit(advance) != std::signbit(remaining))) {
-          advance = 0.0;
-          next_speed = 0.0;
-        } else if (std::abs(advance) > std::abs(remaining)) {
-          advance = remaining;
-          next_speed = advance / dt;
-        }
-        follower_speed_[i] = next_speed;
-        follower_setpoint_[i] += advance;
-        const double servo_error = follower_setpoint_[i] - positions_[i];
-        if (!std::isfinite(servo_error) || std::abs(servo_error) > MAX_FOLLOW_ERROR) {
-          throw std::runtime_error("Follower servo lag exceeds limit on joint " +
-            std::to_string(i+1) + ": " + std::to_string(servo_error) + " rad");
-        }
-        const double absolute_motor_target = follower_setpoint_[i] + offsets_[i];
+        // Request the leader position directly. Zero velocity feedforward
+        // does not impose a software speed limit: the MIT position servo
+        // acts on position error, subject to motor firmware and fault checks.
+        const double absolute_motor_target = requested[i] + offsets_[i];
         outputs[i] = {
-          std::remainder(absolute_motor_target, MOTOR_RANGE), follower_speed_[i],
+          std::remainder(absolute_motor_target, MOTOR_RANGE), 0.0,
           kp_[i], kd_[i], gravity[i]};
       }
     }
