@@ -33,6 +33,7 @@ from std_msgs.msg import String
 
 from .config import DEFAULTS, DashboardConfig
 from .bridge_status import BridgeStatusMonitor
+from .network_probe import NetworkRTTProbe
 from .http_server import ServerThread
 from .state_cache import StateCache
 from .supervision import SUPERVISION_DEFAULTS, SupervisionConfig, Supervisor
@@ -74,6 +75,7 @@ class DashboardNode(Node):
 
         self.store = TelemetryStore(self.config)
         self.bridge_status = BridgeStatusMonitor()
+        self.network_probe = NetworkRTTProbe("100.73.207.42")
         self.cache = StateCache()
         # Milestone 2 ships no safety adapter: safety is Unknown, never Normal.
         self.supervisor = Supervisor(
@@ -186,6 +188,7 @@ class DashboardNode(Node):
         merged["schema"] = 2
         merged["supervision"] = supervision
         merged["robot_control"] = self.bridge_status.snapshot(now)
+        merged["latency"] = self.network_probe.snapshot(now)
         merged["events"] = self.store.events.snapshot()
         self.cache.publish(merged)
 
@@ -193,6 +196,7 @@ class DashboardNode(Node):
 
     def shutdown(self) -> None:
         self._running = False
+        self.network_probe.stop()
         self._server.stop()
 
 
