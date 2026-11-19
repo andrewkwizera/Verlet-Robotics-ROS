@@ -39,6 +39,13 @@ function fmt(value, digits = 3) {
   return text;
 }
 
+// Presentation-only conversion. Keep ROS messages, kinematics and safety limits in radians.
+function fmtDegrees(radians, digits = 2) {
+  if (radians === null || radians === undefined ||
+      !Number.isFinite(Number(radians))) return "\u2014";
+  return fmt(Number(radians) * 180 / Math.PI, digits);
+}
+
 function fmtAge(ms) {
   if (ms === null || ms === undefined || Number.isNaN(ms)) return "\u2014";
   if (ms < 1000) return `${Math.round(ms)} ms`;
@@ -336,8 +343,8 @@ function renderRobotSummaries(data) {
     let text;
     if (role === "follower" && tracking.available) {
       text = `${fmtRate(stream.rate_hz)} \u00b7 max |err| `
-        + `${fmt(tracking.max_abs_error_rad * 1000, 1)} mrad \u00b7 RMS `
-        + `${fmt(tracking.rms_error_rad * 1000, 1)} mrad`;
+        + `${fmtDegrees(tracking.max_abs_error_rad)}\u00b0 \u00b7 RMS `
+        + `${fmtDegrees(tracking.rms_error_rad)}\u00b0`;
     } else if (stream.count) {
       text = `${stream.state_label || stream.state || "\u2014"} \u00b7 `
         + `${fmtRate(stream.rate_hz)} \u00b7 age ${fmtAge(stream.age_ms)}`;
@@ -396,12 +403,12 @@ function renderJoints(data) {
 
     const leaderCell = document.createElement("td");
     leaderCell.className = "val-leader";
-    leaderCell.textContent = fmt(leader[name]);
+    leaderCell.textContent = fmtDegrees(leader[name], 1);
     tr.appendChild(leaderCell);
 
     const followerCell = document.createElement("td");
     followerCell.className = "val-follower";
-    followerCell.textContent = fmt(follower[name]);
+    followerCell.textContent = fmtDegrees(follower[name], 1);
     tr.appendChild(followerCell);
 
     const errorCell = document.createElement("td");
@@ -411,11 +418,11 @@ function renderJoints(data) {
 
     if (row) {
       const magnitude = Math.abs(row.error_rad);
-      errorCell.textContent = fmt(row.error_rad);
+      errorCell.textContent = fmtDegrees(row.error_rad);
       errorCell.style.color = magnitude >= warn ? "var(--bad)"
         : magnitude >= warn * 0.5 ? "var(--warn)" : "var(--ok)";
 
-      mradCell.textContent = fmt(row.error_mrad, 1);
+      mradCell.textContent = fmtDegrees(Math.abs(row.error_rad));
       mradCell.style.color = magnitude >= warn ? "var(--bad)"
         : magnitude >= warn * 0.5 ? "var(--warn)" : "var(--text-dim)";
 
@@ -447,7 +454,7 @@ function renderJoints(data) {
   }
 
   $("joint-sub").textContent = tracking.available
-    ? `max ${fmt(tracking.max_abs_error_rad * 1000, 1)} mrad \u00b7 RMS ${fmt(tracking.rms_error_rad * 1000, 1)} mrad`
+    ? `max ${fmtDegrees(tracking.max_abs_error_rad)}\u00b0 \u00b7 RMS ${fmtDegrees(tracking.rms_error_rad)}\u00b0`
     : "tracking unavailable";
 
   const note = $("joint-note");
@@ -535,7 +542,7 @@ function renderComms(data) {
       const reason = bridge.last_disarm_reason || "none";
 
       const gap = Number.isFinite(bridge.max_separation_rad)
-        ? `${fmt(bridge.max_separation_rad, 3)} rad`
+        ? `${fmtDegrees(bridge.max_separation_rad)}\u00b0`
         : "unavailable";
 
       detail.textContent =
