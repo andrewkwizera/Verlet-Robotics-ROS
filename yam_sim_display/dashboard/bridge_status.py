@@ -34,6 +34,7 @@ def parse_bridge_status(message: str) -> dict:
         "follower": fields.get("follower", "UNKNOWN"),
         "actuation_authorized": fields.get("actuation_authorized") == "true",
         "last_disarm_reason": fields.get("last_disarm_reason", "none"),
+        "reconnect": fields.get("reconnect", "IDLE"),
     }
     for field in _FLOAT_FIELDS:
         try:

@@ -545,9 +545,16 @@ function renderComms(data) {
         ? `${fmtDegrees(bridge.max_separation_rad)}\u00b0`
         : "unavailable";
 
+      const rejoin = bridge.reconnect === "WAITING_FOR_LINK"
+        ? " · Rejoin: waiting for leader connection"
+        : bridge.reconnect === "WAITING_FOR_ALIGNMENT"
+          ? " · Rejoin: align all joints within 5°"
+          : bridge.reconnect === "STABILIZING"
+            ? " · Rejoin: hold still for 0.75 s"
+            : "";
       detail.textContent =
         `Actuation: ${author} · Leader: ${bridge.leader} · ` +
-        `Follower: ${bridge.follower} · Separation: ${gap}` +
+        `Follower: ${bridge.follower} · Separation: ${gap}` + rejoin +
         (reason !== "none" ? ` · Last disarm: ${reason}` : "");
     }
   }

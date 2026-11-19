@@ -29,6 +29,7 @@ def setup(context):
     calibrated = LaunchConfiguration('calibration_verified').perform(context)
     estop = LaunchConfiguration('emergency_stop_verified').perform(context)
     auto_track = LaunchConfiguration('auto_track').perform(context)
+    auto_reconnect = LaunchConfiguration('auto_reconnect').perform(context)
     authorized = all(v.strip().lower() in ('true','1')
                      for v in (allow, calibrated, estop))
 
@@ -72,7 +73,8 @@ def setup(context):
         Node(package='yam_teleop_cpp', executable='yam_live_bridge',
              name='yam_live_bridge', output='screen',
              parameters=[{'actuation_authorized': authorized,
-                          'auto_track': auto_track.strip().lower() in ('true','1')}]),
+                          'auto_track': auto_track.strip().lower() in ('true','1'),
+                          'auto_reconnect': auto_reconnect.strip().lower() in ('true','1')}]),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(camera_launch),
             condition=IfCondition(LaunchConfiguration('enable_cameras')),
@@ -93,6 +95,8 @@ def generate_launch_description():
                               description='Affirm verified independent emergency stop'),
         DeclareLaunchArgument('auto_track', default_value='false',
                               description='Auto-arm bridge once leader and follower align'),
+        DeclareLaunchArgument('auto_reconnect', default_value='true',
+                              description='Auto-rejoin after leader link loss and all joints align within 5 degrees'),
         DeclareLaunchArgument('enable_cameras', default_value='false',
                               description='Start both follower camera sender processes'),
         DeclareLaunchArgument('enable_d405', default_value='true',

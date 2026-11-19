@@ -26,6 +26,7 @@ public:
   YAMLiveBridge() : Node("yam_live_bridge") {
     actuation_authorized_ = declare_parameter<bool>("actuation_authorized", false);
     auto_track_ = declare_parameter<bool>("auto_track", false);
+    auto_reconnect_ = declare_parameter<bool>("auto_reconnect", true);
     command_rate_ = declare_parameter<double>("follower_speed", 0.25);
     if (!std::isfinite(command_rate_) || command_rate_ < 0.05 || command_rate_ > 0.50) {
       throw std::runtime_error("follower_speed must be in [0.05, 0.50] rad/s");
@@ -44,6 +45,8 @@ public:
       [this](const std::shared_ptr<std_srvs::srv::SetBool::Request> req,
              std::shared_ptr<std_srvs::srv::SetBool::Response> res) {
         if (!req->data) {
+          reconnect_pending_ = false;
+          reconnect_candidate_valid_ = false;
           disarm("Operator requested tracking disabled");
           auto_armed_once_ = true;
           res->success = true;
@@ -58,6 +61,8 @@ public:
         }
         auto_armed_once_ = true;
         res->success = true;
+        reconnect_pending_ = false;
+        reconnect_candidate_valid_ = false;
         res->message = "TRACKING ARMED: move the physical leader slowly";
       });
     start_ = Clock::now();
@@ -65,8 +70,11 @@ public:
     timer_ = create_wall_timer(20ms, [this] { tick(); });
     status_timer_ = create_wall_timer(1s, [this] { publish_status(); });
     RCLCPP_WARN(get_logger(),
-      "Bridge ready; auto_track=%s, actuation_authorized=%s; tracking initially OFF",
-      auto_track_ ? "true" : "false", actuation_authorized_ ? "true" : "false");
+      "Bridge ready; auto_track=%s, auto_reconnect=%s, "
+      "actuation_authorized=%s; tracking initially OFF",
+      auto_track_ ? "true" : "false",
+      auto_reconnect_ ? "true" : "false",
+      actuation_authorized_ ? "true" : "false");
   }
 
 private:
@@ -75,6 +83,11 @@ private:
   static constexpr auto STATE_TIMEOUT = 250ms;
   static constexpr double ARM_TOLERANCE = 0.10;  // rad, all joints
   static constexpr double SEPARATION_LIMIT = 0.35; // rad; disarm on unexpectedly large gap
+  // Auto-rejoin gate: five degrees per joint, stable for 750 ms.
+  static constexpr double REJOIN_TOLERANCE = 0.08726646259971647;
+  static constexpr double REJOIN_LEADER_STABILITY = 0.008726646259971648;
+  static constexpr double REJOIN_FOLLOWER_STABILITY = 0.017453292519943295;
+  static constexpr auto REJOIN_DWELL = 750ms;
 
   struct State {
     std::array<double,N> q{};
@@ -182,6 +195,56 @@ private:
     }
   }
 
+  // Only a LEADER stream timeout during an armed session permits auto-rejoin.
+  // Manual disarm, large separation and missing follower feedback never do.
+  void maybe_rejoin(const Clock::time_point now) {
+    if (!reconnect_pending_ || tracking_) return;
+    if (!auto_reconnect_ || !actuation_authorized_ || !fresh(follower_) ||
+        cmd_pub_->get_subscription_count() == 0) {
+      reconnect_pending_ = false;
+      reconnect_candidate_valid_ = false;
+      return;
+    }
+    if (!fresh(leader_)) {
+      reconnect_candidate_valid_ = false;
+      return;
+    }
+    for (std::size_t i = 0; i < N; ++i) {
+      if (std::abs(leader_.q[i] - follower_.q[i]) > REJOIN_TOLERANCE) {
+        reconnect_candidate_valid_ = false;
+        return;
+      }
+    }
+    if (!reconnect_candidate_valid_) {
+      reconnect_candidate_valid_ = true;
+      reconnect_candidate_since_ = now;
+      reconnect_leader_pose_ = leader_.q;
+      reconnect_follower_pose_ = follower_.q;
+      return;
+    }
+    for (std::size_t i = 0; i < N; ++i) {
+      if (std::abs(leader_.q[i] - reconnect_leader_pose_[i]) >
+            REJOIN_LEADER_STABILITY ||
+          std::abs(follower_.q[i] - reconnect_follower_pose_[i]) >
+            REJOIN_FOLLOWER_STABILITY) {
+        reconnect_candidate_valid_ = false;
+        return;
+      }
+    }
+    if (now - reconnect_candidate_since_ < REJOIN_DWELL) return;
+    std::string reason;
+    if (arm_tracking(reason)) {
+      reconnect_pending_ = false;
+      reconnect_candidate_valid_ = false;
+      RCLCPP_WARN(get_logger(),
+        "AUTO-REJOIN: all 6 joints within 5 deg, stable 750 ms; tracking restored");
+    } else {
+      reconnect_candidate_valid_ = false;
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+        "Auto-rejoin blocked: %s", reason.c_str());
+    }
+  }
+
   void tick() {
     const auto now = Clock::now();
     const double dt = std::clamp(std::chrono::duration<double>(now-last_tick_).count(),
@@ -189,6 +252,8 @@ private:
     last_tick_ = now;
     if (!fresh(follower_)) {
       if (tracking_) disarm("Follower feedback lost");
+      reconnect_pending_ = false;
+      reconnect_candidate_valid_ = false;
       return; // Hardware will independently fault on missing CAN/servo cycles.
     }
     if (!have_command_) {
@@ -203,6 +268,8 @@ private:
     if (tracking_) {
       if (!fresh(leader_)) {
         disarm("Leader stream stale");
+        reconnect_pending_ = auto_reconnect_;
+        reconnect_candidate_valid_ = false;
         auto_armed_once_ = true;
       } else {
         double max_gap = 0.0;
@@ -218,6 +285,8 @@ private:
                  << " exceeds " << SEPARATION_LIMIT
                  << " rad (configured command speed " << command_rate_ << " rad/s)";
           disarm(reason.str());
+          reconnect_pending_ = false;
+          reconnect_candidate_valid_ = false;
           auto_armed_once_ = true;
         } else {
           for (std::size_t i=0; i<N; ++i) {
@@ -228,6 +297,7 @@ private:
         }
       }
     }
+    maybe_rejoin(now);
     std_msgs::msg::Float64MultiArray output;
     output.data.assign(command_.begin(), command_.end());
     cmd_pub_->publish(output);
@@ -257,6 +327,10 @@ private:
       << " worst_joint=" << gap_joint
       << " command_gap_rad=" << max_command_gap
       << " follower_speed_rad_s=" << command_rate_
+      << " reconnect=" << (reconnect_pending_
+           ? (!fresh(leader_) ? "WAITING_FOR_LINK"
+              : (reconnect_candidate_valid_ ? "STABILIZING" : "WAITING_FOR_ALIGNMENT"))
+           : "IDLE")
       << " leader_age_ms=" << age_ms(leader_)
       << " follower_age_ms=" << age_ms(follower_)
       << " leader_rx=" << leader_.received_messages
@@ -276,7 +350,13 @@ private:
   double command_rate_ = 0.25;
   bool actuation_authorized_ = false;
   bool auto_track_ = false;
+  bool auto_reconnect_ = true;
   bool tracking_ = false;
+  bool reconnect_pending_ = false;
+  bool reconnect_candidate_valid_ = false;
+  Clock::time_point reconnect_candidate_since_{};
+  std::array<double,N> reconnect_leader_pose_{};
+  std::array<double,N> reconnect_follower_pose_{};
   bool have_command_ = false;
   bool auto_armed_once_ = false;
   std::string last_disarm_reason_;
