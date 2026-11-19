@@ -2,6 +2,9 @@
 build/
 install/
 log/
+build_dashboard/
+install_dashboard/
+log_dashboard/
 src/
 
 # Python generated files
