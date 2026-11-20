@@ -52,6 +52,10 @@ def _launch_setup(context, *args, **kwargs):
             raise ValueError("webrtc_enabled must be true or false")
         overrides["webrtc.enabled"] = normalized == "true"
 
+    webrtc_cameras = LaunchConfiguration("webrtc_cameras").perform(context).strip()
+    if webrtc_cameras:
+        overrides["webrtc.cameras"] = webrtc_cameras
+
     refresh_ms = LaunchConfiguration("refresh_ms").perform(context).strip()
     if refresh_ms:
         overrides["refresh_ms"] = int(refresh_ms)
@@ -108,6 +112,14 @@ def generate_launch_description():
             "webrtc_enabled",
             default_value="",
             description="Enable WebRTC signaling (true/false; default from YAML)",
+        ),
+        DeclareLaunchArgument(
+            "webrtc_cameras",
+            default_value="",
+            description=(
+                "Comma-separated enabled cameras, for example d455f or "
+                "d405,d455f (default from YAML)"
+            ),
         ),
         DeclareLaunchArgument(
             "startup_grace_s",

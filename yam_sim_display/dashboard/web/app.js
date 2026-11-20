@@ -600,11 +600,14 @@ function renderCamera(data) {
     if (pending) pending.hidden = true;
     if (mount) mount.hidden = true;
     const entries = (webrtcSummary && webrtcSummary.cameras) || {};
-    const liveCount = WEBRTC_CAMERAS.filter(
+    const enabledCameras = WEBRTC_CAMERAS.filter(
+      (id) => !entries[id] || entries[id].enabled !== false
+    );
+    const liveCount = enabledCameras.filter(
       (id) => entries[id] && entries[id].live
     ).length;
     const phase = webrtcSummary ? webrtcSummary.phase : "starting";
-    if (liveCount === WEBRTC_CAMERAS.length) {
+    if (enabledCameras.length > 0 && liveCount === enabledCameras.length) {
       setCameraBadge("Live", false);
     } else if (phase === "start-failed" || phase === "session-expired") {
       setCameraBadge("Unavailable", true);
@@ -652,6 +655,18 @@ function renderWebRTCCamera(id, entry, phase) {
   const decoded = Number(browser.framesDecoded || 0);
   const live = Boolean(entry && entry.live && decoded > 0);
   const state = $(`webrtc-state-${id}`);
+  const enabled = !entry || entry.enabled !== false;
+  if (!enabled) {
+    setText(`webrtc-state-${id}`, "disabled");
+    if (state) state.className = "webrtc-state state-stale";
+    setText(
+      `webrtc-detail-${id}`,
+      "Disabled by dashboard camera configuration."
+    );
+    const disabledRetry = $(`webrtc-retry-${id}`);
+    if (disabledRetry) disabledRetry.disabled = true;
+    return;
+  }
   const stateText = live ? "live"
     : (entry && entry.error ? "error"
       : ((entry && entry.connectionState) || "waiting"));

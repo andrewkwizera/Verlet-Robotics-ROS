@@ -11,6 +11,8 @@ from dataclasses import dataclass
 import ipaddress
 from typing import Any, Mapping
 
+SUPPORTED_WEBRTC_CAMERAS = ("d405", "d455f")
+
 # Parameter name -> default value.  Dotted names map to nested YAML sections.
 #
 # The Python type here is authoritative: rclpy rejects a YAML override whose
@@ -35,6 +37,7 @@ DEFAULTS: dict[str, Any] = {
     "diagnostics.static_joint_min_samples": 50,
     "events.max_entries": 200,
     "webrtc.enabled": False,
+    "webrtc.cameras": "d405,d455f",
 }
 
 
@@ -58,6 +61,7 @@ class DashboardConfig:
     static_joint_min_samples: int = DEFAULTS["diagnostics.static_joint_min_samples"]
     max_events: int = DEFAULTS["events.max_entries"]
     webrtc_enabled: bool = DEFAULTS["webrtc.enabled"]
+    webrtc_cameras: tuple[str, ...] = SUPPORTED_WEBRTC_CAMERAS
 
     @classmethod
     def from_parameter_dict(cls, values: Mapping[str, Any]) -> "DashboardConfig":
@@ -104,6 +108,22 @@ class DashboardConfig:
                 f"{rate_min}/{rate_max}"
             )
 
+        camera_ids = tuple(
+            camera.strip().lower()
+            for camera in str(get("webrtc.cameras")).split(",")
+            if camera.strip()
+        )
+        if not camera_ids:
+            raise ValueError("webrtc.cameras must contain at least one camera")
+        if len(set(camera_ids)) != len(camera_ids):
+            raise ValueError("webrtc.cameras must not contain duplicates")
+        unknown = [
+            camera for camera in camera_ids
+            if camera not in SUPPORTED_WEBRTC_CAMERAS
+        ]
+        if unknown:
+            raise ValueError(f"unknown WebRTC camera: {unknown[0]}")
+
         return cls(
             leader_topic=str(get("leader_topic")),
             follower_topic=str(get("follower_topic")),
@@ -127,4 +147,5 @@ class DashboardConfig:
             ),
             max_events=int(get("events.max_entries")),
             webrtc_enabled=bool(get("webrtc.enabled")),
+            webrtc_cameras=camera_ids,
         )

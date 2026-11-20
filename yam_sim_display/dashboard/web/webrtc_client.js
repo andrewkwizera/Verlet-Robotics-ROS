@@ -103,6 +103,7 @@
     for (const id of cameras) {
       state.cameras[id] = {
         id,
+        enabled: true,
         pc: null,
         generation: 0,
         live: false,
@@ -552,6 +553,14 @@
           throw new Error("invalid signaling discovery response");
         }
 
+        // The dashboard advertises only cameras enabled for this deployment.
+        // Older servers omit this field, so keep the two-camera default there.
+        const advertised = Array.isArray(discovery.cameras)
+          ? new Set(discovery.cameras) : new Set(cameras);
+        for (const id of cameras) {
+          state.cameras[id].enabled = advertised.has(id);
+        }
+
         setPhase("creating-session");
         const session = await requestJson("/api/webrtc/session", {
           method: "POST",
@@ -564,7 +573,8 @@
         startKeepalive();
         // Camera setup is isolated: a failure in one mailbox never tears down
         // the other camera's peer connection or stats pollers.
-        await Promise.all(cameras.map(async (id) => {
+        const enabledCameras = cameras.filter((id) => state.cameras[id].enabled);
+        await Promise.all(enabledCameras.map(async (id) => {
           try {
             await setupCamera(id, state.sessionId);
           } catch (error) {
@@ -604,6 +614,9 @@
       const sessionId = state.sessionId;
       if (!sessionId) return Promise.reject(new Error("no active session"));
       const entry = state.cameras[id];
+      if (!entry.enabled) {
+        return Promise.reject(new Error("camera disabled by dashboard config"));
+      }
       resetCamera(id);
       entry.error = null;
       notify();
@@ -650,6 +663,7 @@
         const entry = state.cameras[id];
         result.cameras[id] = {
           id,
+          enabled: Boolean(entry.enabled),
           live: Boolean(entry.live),
           connectionState: entry.connectionState,
           iceConnectionState: entry.iceConnectionState,

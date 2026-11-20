@@ -177,7 +177,10 @@ class _DashboardHandler(BaseHTTPRequestHandler):
             return
 
         if route == "/api/webrtc/sessions":
-            self._send_json(200, {"sessions": store.active_sessions()})
+            self._send_json(200, {
+                "cameras": list(store.camera_ids),
+                "sessions": store.active_sessions(),
+            })
             return
 
         ids = self._webrtc_session_ids(parts)

@@ -63,3 +63,6 @@ yam_dashboard:
     # Signaling has no authentication and no TLS: do not expose it publicly.
     webrtc:
       enabled: false
+      # Comma-separated cameras offered to the browser. Use "d455f" when
+      # only the D455f camera and gateway worker are running.
+      cameras: "d405,d455f"

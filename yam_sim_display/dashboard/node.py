@@ -111,7 +111,10 @@ class DashboardNode(Node):
         self._reported_first = {"leader": False, "follower": False}
 
         # M3 signaling is independent of ROS state and disabled by default.
-        self.signaling = SignalingStore() if self.config.webrtc_enabled else None
+        self.signaling = (
+            SignalingStore(camera_ids=self.config.webrtc_cameras)
+            if self.config.webrtc_enabled else None
+        )
         self._server = ServerThread(
             self.cache,
             self.config.bind_address,

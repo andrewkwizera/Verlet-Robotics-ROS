@@ -56,6 +56,11 @@ class SignalingStore:
         self._sessions: Dict[str, float] = {}
         self._mailboxes: Dict[Tuple[str, str], dict] = {}
 
+    @property
+    def camera_ids(self) -> tuple[str, ...]:
+        """Return the cameras enabled for this dashboard deployment."""
+        return self._camera_ids
+
     # -- sessions -----------------------------------------------------------
 
     def create_session(self) -> str:
