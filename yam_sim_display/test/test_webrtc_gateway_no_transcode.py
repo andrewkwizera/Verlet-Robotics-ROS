@@ -40,6 +40,8 @@ class NoTranscodeTests(unittest.TestCase):
         self.assertTrue(REQUIRED_FACTORIES.issubset(factories))
         self.assertFalse(factories & BANNED_FACTORIES)
         self.assertIn("media=video,encoding-name=H264", source)
+        self.assertIn('self.queue.set_property("leaky", 2)', source)
+        self.assertNotIn('max-size-buffers", 300', source)
 
     def test_gateway_does_not_import_ros(self):
         for name in ("gateway/camera.py", "gateway/gateway.py", "gateway/run.py"):
@@ -56,8 +58,8 @@ class NoTranscodeTests(unittest.TestCase):
         )
         with open(path, encoding="utf-8") as handle:
             document = json.load(handle)
-        self.assertEqual(document["cameras"]["d405"]["port"], 5000)
-        self.assertEqual(document["cameras"]["d455f"]["port"], 5002)
+        self.assertEqual(document["cameras"]["d405"]["port"], 5100)
+        self.assertEqual(document["cameras"]["d455f"]["port"], 5102)
 
 
 if __name__ == "__main__":

@@ -664,8 +664,30 @@ function renderWebRTCCamera(id, entry, phase) {
 
   const pt = gatewayStats.negotiated_pt === undefined
     || gatewayStats.negotiated_pt === null ? "\u2014" : gatewayStats.negotiated_pt;
+  const fps = Number(browser.fps || 0).toFixed(1);
+  const bitrateMbps = (Number(browser.bitrateKbps || 0) / 1000).toFixed(2);
+  const jitterMs = Number(browser.jitterMs || 0).toFixed(1);
+  const rttMs = browser.roundTripTimeMs === null
+    || browser.roundTripTimeMs === undefined
+    ? "\u2014" : Number(browser.roundTripTimeMs).toFixed(1);
+  const resolution = browser.frameWidth && browser.frameHeight
+    ? `${browser.frameWidth}\u00d7${browser.frameHeight}` : "\u2014";
+  const timingLine = browser.timingAvailable
+    ? `estimate \u00b7 camera\u2192screen ${Number(
+      browser.cameraToScreenLatestMs || 0
+    ).toFixed(1)} ms \u00b7 median ${Number(
+      browser.cameraToScreenMedianMs || 0
+    ).toFixed(1)} \u00b7 P95 ${Number(
+      browser.cameraToScreenP95Ms || 0
+    ).toFixed(1)}`
+    : `estimate \u00b7 ${browser.timingReason || "camera timing unavailable"}`;
   const lines = [
-    `browser \u00b7 ${decoded} frames \u00b7 ${browser.packetsReceived || 0} packets`,
+    timingLine,
+    `video \u00b7 ${fps} FPS \u00b7 ${bitrateMbps} Mbps \u00b7 ${resolution}`,
+    `transport \u00b7 jitter ${jitterMs} ms \u00b7 RTT ${rttMs} ms \u00b7 `
+      + `lost ${browser.packetsLost || 0}`,
+    `quality \u00b7 ${decoded} decoded \u00b7 ${browser.framesDropped || 0} dropped \u00b7 `
+      + `${browser.freezeCount || 0} freezes`,
     `gateway \u00b7 ${gateway.health || "unknown"} \u00b7 `
       + `${gatewayStats.ingress_packets || 0} packets \u00b7 PT ${pt}`,
   ];

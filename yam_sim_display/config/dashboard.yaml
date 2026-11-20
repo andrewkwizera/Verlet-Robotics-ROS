@@ -21,6 +21,10 @@ yam_dashboard:
     port: 8080
     bind_address: "127.0.0.1"
 
+    # Optional peer IP used only for the dashboard's ICMP RTT display.
+    # Keep deployment-specific addresses out of the public repository.
+    network_rtt_host: ""
+
     # Browser poll interval (ms). 50-2000 are accepted.
     refresh_ms: 100
 

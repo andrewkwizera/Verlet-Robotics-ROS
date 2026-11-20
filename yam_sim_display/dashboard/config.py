@@ -8,6 +8,7 @@ launch file may override ``port`` / ``bind_address`` on top of the YAML.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import ipaddress
 from typing import Any, Mapping
 
 # Parameter name -> default value.  Dotted names map to nested YAML sections.
@@ -20,6 +21,7 @@ DEFAULTS: dict[str, Any] = {
     "follower_topic": "/follower/joint_states",
     "port": 8080,
     "bind_address": "127.0.0.1",
+    "network_rtt_host": "",
     "refresh_ms": 100,
     "freshness.warning_ms": 250.0,
     "freshness.stale_ms": 1000.0,
@@ -42,6 +44,7 @@ class DashboardConfig:
     follower_topic: str = DEFAULTS["follower_topic"]
     port: int = DEFAULTS["port"]
     bind_address: str = DEFAULTS["bind_address"]
+    network_rtt_host: str = DEFAULTS["network_rtt_host"]
     refresh_ms: int = DEFAULTS["refresh_ms"]
     warning_s: float = DEFAULTS["freshness.warning_ms"] / 1000.0
     stale_s: float = DEFAULTS["freshness.stale_ms"] / 1000.0
@@ -76,6 +79,13 @@ class DashboardConfig:
         if not bind:
             raise ValueError("bind_address must not be empty")
 
+        network_rtt_host = str(get("network_rtt_host")).strip()
+        if network_rtt_host:
+            try:
+                ipaddress.ip_address(network_rtt_host)
+            except ValueError as exc:
+                raise ValueError("network_rtt_host must be an IP address") from exc
+
         warning_s = float(get("freshness.warning_ms")) / 1000.0
         stale_s = float(get("freshness.stale_ms")) / 1000.0
         disconnect_s = float(get("freshness.disconnect_ms")) / 1000.0
@@ -99,6 +109,7 @@ class DashboardConfig:
             follower_topic=str(get("follower_topic")),
             port=port,
             bind_address=bind,
+            network_rtt_host=network_rtt_host,
             refresh_ms=refresh_ms,
             warning_s=warning_s,
             stale_s=stale_s,

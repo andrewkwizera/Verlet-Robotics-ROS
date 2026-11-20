@@ -30,6 +30,7 @@ secrets.yml
 # Machine-specific configuration
 *.local.yaml
 *.local.yml
+*.local.json
 *.private.yaml
 *.private.yml
 **/yam_camera/config/cameras.local.yaml

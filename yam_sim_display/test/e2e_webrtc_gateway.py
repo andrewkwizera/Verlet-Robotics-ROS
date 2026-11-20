@@ -40,7 +40,7 @@ import cdp  # noqa: E402  (unchanged spike client, imported without bytecode wri
 from gateway.signaling_client import SignalingClient  # noqa: E402
 
 CAMERAS = ("d405", "d455f")
-PORTS = {"d405": 5000, "d455f": 5002}
+PORTS = {"d405": 5100, "d455f": 5102}
 PAGES = {
     "diagnostic": {
         "path": "/webrtc_diagnostic.html",

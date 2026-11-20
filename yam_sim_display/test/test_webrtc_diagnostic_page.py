@@ -69,6 +69,12 @@ class DiagnosticPageTests(unittest.TestCase):
         self.assertIn('source: "gateway"', self.client)
         self.assertIn("getStats()", self.client)
         self.assertIn("gatewayHealth", self.client)
+        self.assertIn("bitrateKbps", self.client)
+        self.assertIn("roundTripTimeMs", self.client)
+        self.assertIn("detectedFreezeCount", self.client)
+        self.assertIn("cameraToScreenLatestMs", self.client)
+        self.assertIn("captureToReceiveMs", self.client)
+        self.assertIn("receiveToDisplayMs", self.client)
 
     def test_session_ids_are_absent_from_public_snapshot(self):
         self.assertIn(

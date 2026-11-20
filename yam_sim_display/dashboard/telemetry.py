@@ -556,10 +556,10 @@ class TelemetryStore:
                 "state": "pending",
                 "title": "Camera feed pending",
                 "reason": (
-                    "The existing camera system streams H.264 over GStreamer "
-                    "RTP/UDP (UDP 5000 and 5002) and publishes no ROS image "
-                    "topic. A browser-compatible gateway (WebRTC, HLS or MJPEG) "
-                    "is required before video can be shown here."
+                    "The GStreamer camera sender provides native RTP on leader ports "
+                    "5000/5002 and local WebRTC gateway RTP on follower ports "
+                    "5100/5102. Enable WebRTC signaling and start the gateway "
+                    "to show video here."
                 ),
                 "stream_url": None,
             },

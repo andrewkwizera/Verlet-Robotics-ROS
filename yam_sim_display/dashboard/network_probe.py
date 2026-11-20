@@ -16,14 +16,18 @@ import time
 
 
 class NetworkRTTProbe:
-    def __init__(self, target: str = "100.73.207.42") -> None:
-        self.target = str(ipaddress.ip_address(target))
+    def __init__(self, target: str = "") -> None:
+        self.target = str(ipaddress.ip_address(target)) if target else ""
         self._samples = deque(maxlen=60)
         self._last_ok = None
         self._lock = threading.Lock()
         self._stop = threading.Event()
-        self._thread = threading.Thread(target=self._loop, name="yam-rtt-probe", daemon=True)
-        self._thread.start()
+        self._thread = None
+        if self.target:
+            self._thread = threading.Thread(
+                target=self._loop, name="yam-rtt-probe", daemon=True
+            )
+            self._thread.start()
 
     def _loop(self) -> None:
         while not self._stop.is_set():
@@ -46,6 +50,12 @@ class NetworkRTTProbe:
     def snapshot(self, now: float | None = None) -> dict:
         if now is None:
             now = time.monotonic()
+        if not self.target:
+            return {
+                "available": False,
+                "display": "Network RTT not configured",
+                "reason": "Set network_rtt_host to enable the ICMP RTT probe.",
+            }
         with self._lock:
             values = list(self._samples)
             age = None if self._last_ok is None else now - self._last_ok
@@ -70,4 +80,5 @@ class NetworkRTTProbe:
 
     def stop(self) -> None:
         self._stop.set()
-        self._thread.join(timeout=2.5)
+        if self._thread is not None:
+            self._thread.join(timeout=2.5)

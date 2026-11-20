@@ -75,7 +75,7 @@ class DashboardNode(Node):
 
         self.store = TelemetryStore(self.config)
         self.bridge_status = BridgeStatusMonitor()
-        self.network_probe = NetworkRTTProbe("100.73.207.42")
+        self.network_probe = NetworkRTTProbe(self.config.network_rtt_host)
         self.cache = StateCache()
         # Milestone 2 ships no safety adapter: safety is Unknown, never Normal.
         self.supervisor = Supervisor(

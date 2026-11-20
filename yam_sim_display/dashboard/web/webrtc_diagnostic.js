@@ -46,6 +46,28 @@ function renderMetrics(id, entry) {
     ["ICE", entry.iceConnectionState],
     ["video readyState", String(entry.readyState)],
     ["browser framesDecoded", String(browser.framesDecoded || 0)],
+    ["estimated camera-to-screen latest ms", browser.timingAvailable
+      ? Number(browser.cameraToScreenLatestMs || 0).toFixed(1) : "unavailable"],
+    ["estimated camera-to-screen median ms", browser.timingAvailable
+      ? Number(browser.cameraToScreenMedianMs || 0).toFixed(1) : "unavailable"],
+    ["estimated camera-to-screen P95 ms", browser.timingAvailable
+      ? Number(browser.cameraToScreenP95Ms || 0).toFixed(1) : "unavailable"],
+    ["timing samples", String(browser.cameraToScreenSamples || 0)],
+    ["capture-to-receive ms", browser.captureToReceiveMs === null
+      || browser.captureToReceiveMs === undefined
+      ? "-" : Number(browser.captureToReceiveMs).toFixed(1)],
+    ["receive-to-display ms", browser.receiveToDisplayMs === null
+      || browser.receiveToDisplayMs === undefined
+      ? "-" : Number(browser.receiveToDisplayMs).toFixed(1)],
+    ["browser FPS", Number(browser.fps || 0).toFixed(1)],
+    ["browser bitrate Mbps", (Number(browser.bitrateKbps || 0) / 1000).toFixed(2)],
+    ["browser frames dropped", String(browser.framesDropped || 0)],
+    ["browser freezes", String(browser.freezeCount || 0)],
+    ["transport jitter ms", Number(browser.jitterMs || 0).toFixed(1)],
+    ["transport RTT ms", browser.roundTripTimeMs === null
+      || browser.roundTripTimeMs === undefined
+      ? "-" : Number(browser.roundTripTimeMs).toFixed(1)],
+    ["transport packets lost", String(browser.packetsLost || 0)],
     ["browser packetsReceived", String(browser.packetsReceived || 0)],
     ["gateway health", gateway.health || "unknown"],
     ["gateway ingress packets", String(stats.ingress_packets || 0)],

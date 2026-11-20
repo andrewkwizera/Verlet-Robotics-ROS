@@ -61,6 +61,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.follower_topic, "/follower/joint_states")
         self.assertEqual(config.port, 8080)
         self.assertEqual(config.bind_address, "127.0.0.1")
+        self.assertEqual(config.network_rtt_host, "")
         self.assertFalse(config.webrtc_enabled)
         self.assertLess(config.warning_s, config.stale_s)
         self.assertLess(config.stale_s, config.disconnect_s)
@@ -79,6 +80,12 @@ class ConfigTests(unittest.TestCase):
     def test_empty_bind_rejected(self):
         with self.assertRaises(ValueError):
             make_config(bind_address="   ")
+
+    def test_optional_network_rtt_host_is_validated(self):
+        config = make_config(network_rtt_host="192.0.2.20")
+        self.assertEqual(config.network_rtt_host, "192.0.2.20")
+        with self.assertRaises(ValueError):
+            make_config(network_rtt_host="not-an-ip")
 
     def test_rate_band_enforced(self):
         with self.assertRaises(ValueError):
