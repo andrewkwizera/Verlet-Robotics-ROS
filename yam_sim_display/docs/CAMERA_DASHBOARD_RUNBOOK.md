@@ -1,5 +1,8 @@
 # Physical camera dashboard runbook
 
+For the complete robot, ROS 2, dashboard and camera startup sequence, see
+`FULL_SYSTEM_STARTUP_GUIDE.md` at the repository root.
+
 This guide starts one D455f camera on the follower NUC and displays it in the
 operator dashboard through WebRTC. Replace values inside angle brackets with
 the addresses used by your NUCs. Do not commit those addresses.
