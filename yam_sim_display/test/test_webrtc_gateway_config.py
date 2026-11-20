@@ -30,13 +30,15 @@ class GatewayConfigTests(unittest.TestCase):
         self.assertEqual(CAMERA_IDS, ("d405", "d455f"))
         self.assertEqual(
             {camera.camera_id: camera.port for camera in config.cameras},
-            {"d405": 5000, "d455f": 5002},
+            {"d405": 5100, "d455f": 5102},
         )
         self.assertEqual(
             {camera.camera_id: camera.host for camera in config.cameras},
             {"d405": "127.0.0.1", "d455f": "127.0.0.1"},
         )
         self.assertTrue(config.run_dir)
+        self.assertEqual(config.jitter_buffer_ms, 30)
+        self.assertEqual(config.queue_max_packets, 32)
 
     def test_load_from_json_file(self):
         document = {
@@ -72,7 +74,7 @@ class GatewayConfigTests(unittest.TestCase):
         by_id = {camera.camera_id: camera for camera in config.cameras}
         self.assertEqual(by_id["d405"].host, "192.168.1.20")
         self.assertEqual(by_id["d405"].port, 6000)
-        self.assertEqual(by_id["d455f"].port, 5002)
+        self.assertEqual(by_id["d455f"].port, 5102)
 
     def test_parse_camera_spec(self):
         self.assertEqual(
@@ -84,6 +86,13 @@ class GatewayConfigTests(unittest.TestCase):
                 with self.assertRaises((ValueError, argparse.ArgumentTypeError)):
                     parse_camera_spec(value)
 
+    def test_only_camera_filters_other_defaults(self):
+        config = from_args(["--only-camera", "d455f"])
+        self.assertEqual(
+            [camera.camera_id for camera in config.cameras], ["d455f"]
+        )
+        self.assertEqual(config.cameras[0].port, 5102)
+
     def test_validation(self):
         invalid_documents = [
             {"signaling_url": "ftp://example"},
@@ -94,6 +103,10 @@ class GatewayConfigTests(unittest.TestCase):
             {"poll_timeout_s": 40.0},
             {"keepalive_interval_s": 0.0},
             {"stats_interval_s": -1.0},
+            {"jitter_buffer_ms": -1},
+            {"jitter_buffer_ms": 501},
+            {"queue_max_packets": 0},
+            {"queue_max_packets": 1001},
         ]
         for document in invalid_documents:
             with self.subTest(document=document):

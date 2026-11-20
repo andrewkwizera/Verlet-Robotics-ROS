@@ -1,5 +1,11 @@
 # M3 Phase 1a — Frozen Design for WebRTC Camera Integration
 
+> Historical design baseline: the implemented physical sender now creates
+> follower-local gateway copies on UDP `5100/5102` while retaining native
+> leader outputs on `5000/5002`. See `CAMERA_DASHBOARD_RUNBOOK.md` for the
+> current workflow. Physical validation is still required before closing the
+> gates recorded in this document.
+
 Status: **Phase 1a design freeze. Approved for Emrys's review.**
 No implementation files are part of Phase 1a. Phase 1b (dashboard signaling) and all runtime code are explicitly out of scope for this deliverable.
 

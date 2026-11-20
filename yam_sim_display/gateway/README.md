@@ -4,16 +4,17 @@ A ROS-free Follower-side process that receives two already-encoded H.264 RTP
 streams and forwards them through two independent `webrtcbin` peer connections
 to a browser. Signaling uses the Phase 1b API on the Leader dashboard.
 
-This is a research prototype. It is **not** physical camera integration and
-makes no glass-to-glass latency claim.
+This is a research prototype. The physical camera sender now provides local
+RTP copies for this gateway, but physical validation is still required. The
+gateway makes no glass-to-glass latency claim.
 
 ## Architecture
 
-```
-synthetic RTP :5000 ─┐
-                     ├─ udpsrc → rtpjitterbuffer → rtph264depay → h264parse
-synthetic RTP :5002 ─┘     → rtph264pay → queue → webrtcbin → browser
-                                   (no decode / encode / convert)
+```text
+D405 RTP  :5100 ─┐
+                 ├─ udpsrc -> rtpjitterbuffer -> rtph264depay -> h264parse
+D455f RTP :5102 ─┘     -> rtph264pay -> queue -> webrtcbin -> browser
+                              (no decode / encode / convert)
 ```
 
 - One `CameraPipeline` and one signaling worker per camera (`d405`, `d455f`).
@@ -37,8 +38,8 @@ synthetic RTP :5002 ─┘     → rtph264pay → queue → webrtcbin → browse
 2. Start each synthetic sender from the unchanged Phase 0 spike:
 
    ```bash
-   python3 yam_sim_display/spike/webrtc_poc/sender.py --id d405 --port 5000
-   python3 yam_sim_display/spike/webrtc_poc/sender.py --id d455f --port 5002
+   python3 yam_sim_display/spike/webrtc_poc/sender.py --id d405 --port 5100
+   python3 yam_sim_display/spike/webrtc_poc/sender.py --id d455f --port 5102
    ```
 
 3. Start the gateway from source (no ROS setup required):
@@ -90,12 +91,14 @@ Defaults live in `config/webrtc_gateway.json` and `gateway/config.py`:
 {
   "signaling_url": "http://127.0.0.1:8080",
   "cameras": {
-    "d405":  {"host": "127.0.0.1", "port": 5000},
-    "d455f": {"host": "127.0.0.1", "port": 5002}
+    "d405":  {"host": "127.0.0.1", "port": 5100},
+    "d455f": {"host": "127.0.0.1", "port": 5102}
   },
   "poll_timeout_s": 10.0,
   "keepalive_interval_s": 60.0,
-  "stats_interval_s": 1.0
+  "stats_interval_s": 1.0,
+  "jitter_buffer_ms": 30,
+  "queue_max_packets": 32
 }
 ```
 
@@ -104,10 +107,16 @@ CLI overrides:
 - `--config PATH`
 - `--signaling URL`
 - `--camera ID:HOST:PORT` (repeatable)
+- `--only-camera ID` (repeatable; useful when only one camera is connected)
 - `--run-dir PATH`
 - `--poll-timeout`, `--keepalive-interval`, `--stats-interval`
+- `--jitter-buffer-ms`, `--queue-max-packets`
 
-Use `--camera d405:<follower-ip>:5000` and the same form for `d455f` when the
+The jitter buffer drops packets that arrive outside its configured latency.
+The queue is downstream-leaky, so a slow browser drops old RTP packets instead
+of causing video delay to grow over time.
+
+Use `--camera d405:<follower-ip>:5100` and the same form for `d455f` when the
 RTP senders are not on the same host as the gateway. No camera launch files,
 `cameras.local.yaml`, udev rules, network, VPN or firewall configuration are
 changed by this package.
@@ -140,8 +149,8 @@ effort and is recorded separately without affecting the acceptance result.
 
 ## Known limitations
 
-- Synthetic RTP only. Real D405/D455f RTP topology is still gated by
-  `PV-RTP-01` and is not claimed as validated here.
+- Real D405/D455f RTP inputs are implemented but still require physical
+  validation before `PV-RTP-01` can be marked complete.
 - One active browser session is served (newest wins); multi-tab concurrency
   is out of scope.
 - The per-camera retry buttons on both pages are best effort in headless

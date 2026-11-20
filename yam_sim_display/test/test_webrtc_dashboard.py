@@ -84,12 +84,35 @@ class DashboardWebRTCIntegrationTests(unittest.TestCase):
         self.assertIn("Camera setup is isolated", self.client)
 
     def test_browser_and_gateway_metrics_render_separately(self):
-        self.assertIn("`browser ", self.app)
+        self.assertIn("`video ", self.app)
+        self.assertIn("`transport ", self.app)
+        self.assertIn("`quality ", self.app)
         self.assertIn("`gateway ", self.app)
-        self.assertIn("${decoded} frames", self.app)
+        self.assertIn("${fps} FPS", self.app)
+        self.assertIn("${bitrateMbps} Mbps", self.app)
+        self.assertIn("jitter ${jitterMs} ms", self.app)
+        self.assertIn("RTT ${rttMs} ms", self.app)
+        self.assertIn("${browser.freezeCount || 0} freezes", self.app)
         self.assertIn("${gateway.health", self.app)
         self.assertIn('source: "browser"', self.client)
         self.assertIn('source: "gateway"', self.client)
+
+    def test_transport_metrics_are_not_labelled_glass_to_glass(self):
+        self.assertIn("browser estimate", self.html)
+        self.assertIn("validated with a physical timing test", self.html)
+        self.assertIn("currentRoundTripTime", self.client)
+        self.assertIn("framesDropped", self.client)
+        self.assertIn("freezeCount", self.client)
+
+    def test_rendered_frame_timing_is_estimated_and_optional(self):
+        self.assertIn("requestVideoFrameCallback", self.client)
+        self.assertIn("cancelVideoFrameCallback", self.client)
+        self.assertIn("metadata.captureTime", self.client)
+        self.assertIn("metadata.receiveTime", self.client)
+        self.assertIn("metadata.expectedDisplayTime", self.client)
+        self.assertIn("cameraToScreenMedianMs", self.client)
+        self.assertIn("cameraToScreenP95Ms", self.client)
+        self.assertIn("camera timing unavailable", self.app)
 
     def test_retry_is_selected_camera_only_and_best_effort(self):
         self.assertIn("window.__YAM_WEBRTC__ = {", self.app)

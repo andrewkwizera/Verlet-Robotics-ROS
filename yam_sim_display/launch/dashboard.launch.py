@@ -7,6 +7,10 @@ existing simulation launch files.
 Terminal 1: ros2 launch yam_sim_display full_sim.launch.py
 Terminal 2: ros2 launch yam_sim_display dashboard.launch.py
 Browser  : http://localhost:8080
+
+Physical WebRTC example:
+  ros2 launch yam_sim_display dashboard.launch.py \
+    bind_address:=<LEADER_IP> webrtc_enabled:=true
 """
 
 import os
@@ -36,6 +40,17 @@ def _launch_setup(context, *args, **kwargs):
     bind_address = LaunchConfiguration("bind_address").perform(context).strip()
     if bind_address:
         overrides["bind_address"] = bind_address
+
+    network_rtt_host = LaunchConfiguration("network_rtt_host").perform(context).strip()
+    if network_rtt_host:
+        overrides["network_rtt_host"] = network_rtt_host
+
+    webrtc_enabled = LaunchConfiguration("webrtc_enabled").perform(context).strip()
+    if webrtc_enabled:
+        normalized = webrtc_enabled.lower()
+        if normalized not in ("true", "false"):
+            raise ValueError("webrtc_enabled must be true or false")
+        overrides["webrtc.enabled"] = normalized == "true"
 
     refresh_ms = LaunchConfiguration("refresh_ms").perform(context).strip()
     if refresh_ms:
@@ -83,6 +98,16 @@ def generate_launch_description():
             "refresh_ms",
             default_value="",
             description="Browser poll interval in ms (default: 100)",
+        ),
+        DeclareLaunchArgument(
+            "network_rtt_host",
+            default_value="",
+            description="Optional peer IP for the read-only ICMP RTT display",
+        ),
+        DeclareLaunchArgument(
+            "webrtc_enabled",
+            default_value="",
+            description="Enable WebRTC signaling (true/false; default from YAML)",
         ),
         DeclareLaunchArgument(
             "startup_grace_s",

@@ -116,6 +116,17 @@
         gatewayStats: {},
         answerApplied: false,
         statsTimer: null,
+        statsSample: null,
+        stalledForMs: 0,
+        freezeActive: false,
+        detectedFreezeCount: 0,
+        videoFrameCallbackId: null,
+        timingVideo: null,
+        renderLatencySamples: [],
+        renderTiming: {
+          available: false,
+          reason: "waiting for rendered frames",
+        },
       };
     }
 
@@ -153,6 +164,15 @@
         global.clearInterval(entry.statsTimer);
         entry.statsTimer = null;
       }
+      if (
+        entry.videoFrameCallbackId !== null
+        && entry.timingVideo
+        && typeof entry.timingVideo.cancelVideoFrameCallback === "function"
+      ) {
+        entry.timingVideo.cancelVideoFrameCallback(entry.videoFrameCallbackId);
+      }
+      entry.videoFrameCallbackId = null;
+      entry.timingVideo = null;
       if (entry.pc !== null) {
         try { entry.pc.close(); } catch (_) { /* already closed */ }
         entry.pc = null;
@@ -174,6 +194,15 @@
       entry.gatewayHealth = "unknown";
       entry.gatewayStats = {};
       entry.answerApplied = false;
+      entry.statsSample = null;
+      entry.stalledForMs = 0;
+      entry.freezeActive = false;
+      entry.detectedFreezeCount = 0;
+      entry.renderLatencySamples = [];
+      entry.renderTiming = {
+        available: false,
+        reason: "waiting for rendered frames",
+      };
       notify();
     }
 
@@ -213,6 +242,66 @@
       }, 1000);
     }
 
+    function percentile(values, fraction) {
+      if (!values.length) return null;
+      const ordered = values.slice().sort((a, b) => a - b);
+      const index = Math.max(
+        0, Math.min(ordered.length - 1, Math.ceil(ordered.length * fraction) - 1)
+      );
+      return ordered[index];
+    }
+
+    function startRenderTiming(id, sessionId, pc, generation, video) {
+      const entry = state.cameras[id];
+      entry.timingVideo = video;
+      if (!video || typeof video.requestVideoFrameCallback !== "function") {
+        entry.renderTiming = {
+          available: false,
+          reason: "browser does not support rendered-frame timing",
+        };
+        return;
+      }
+
+      const onFrame = (_now, metadata) => {
+        if (!isCurrent(id, sessionId, pc, generation)) return;
+        const captureTime = Number(metadata.captureTime);
+        const receiveTime = Number(metadata.receiveTime);
+        const displayTime = Number(metadata.expectedDisplayTime);
+        if (
+          Number.isFinite(captureTime)
+          && Number.isFinite(displayTime)
+          && displayTime >= captureTime
+        ) {
+          const cameraToScreenMs = displayTime - captureTime;
+          if (cameraToScreenMs <= 10000) {
+            entry.renderLatencySamples.push(cameraToScreenMs);
+            if (entry.renderLatencySamples.length > 120) {
+              entry.renderLatencySamples.shift();
+            }
+            entry.renderTiming = {
+              available: true,
+              latestMs: cameraToScreenMs,
+              medianMs: percentile(entry.renderLatencySamples, 0.5),
+              p95Ms: percentile(entry.renderLatencySamples, 0.95),
+              sampleCount: entry.renderLatencySamples.length,
+              captureToReceiveMs: Number.isFinite(receiveTime)
+                && receiveTime >= captureTime ? receiveTime - captureTime : null,
+              receiveToDisplayMs: Number.isFinite(receiveTime)
+                && displayTime >= receiveTime ? displayTime - receiveTime : null,
+            };
+          }
+        } else {
+          entry.renderTiming = {
+            available: false,
+            reason: "WebRTC capture timing is unavailable",
+          };
+        }
+        entry.videoFrameCallbackId = video.requestVideoFrameCallback(onFrame);
+      };
+
+      entry.videoFrameCallbackId = video.requestVideoFrameCallback(onFrame);
+    }
+
     async function setupCamera(id, sessionId) {
       const entry = state.cameras[id];
       if (!entry) throw new Error("unknown camera");
@@ -244,6 +333,9 @@
           const play = video.play();
           if (play && typeof play.catch === "function") {
             play.catch(() => { /* autoplay policy; diagnostic only */ });
+          }
+          if (entry.videoFrameCallbackId === null) {
+            startRenderTiming(id, sessionId, pc, generation, video);
           }
         }
       };
@@ -335,6 +427,8 @@
         try {
           const report = await pc.getStats();
           let inbound = null;
+          let transport = null;
+          let candidatePair = null;
           report.forEach((item) => {
             if (
               item.type === "inbound-rtp"
@@ -343,20 +437,96 @@
             ) {
               inbound = item;
             }
+            if (item.type === "transport") transport = item;
+            if (
+              item.type === "candidate-pair"
+              && item.state === "succeeded"
+              && item.nominated
+            ) {
+              candidatePair = item;
+            }
           });
+          if (
+            transport
+            && transport.selectedCandidatePairId
+            && typeof report.get === "function"
+          ) {
+            candidatePair = report.get(transport.selectedCandidatePairId)
+              || candidatePair;
+          }
           const video = getVideo(id);
           const quality = video && video.getVideoPlaybackQuality
             ? video.getVideoPlaybackQuality() : null;
           entry.readyState = video ? video.readyState : 0;
           entry.videoFrames = quality ? quality.totalVideoFrames : 0;
+
+          const sampledAt = global.performance && global.performance.now
+            ? global.performance.now() : Date.now();
+          const framesDecoded = inbound ? Number(inbound.framesDecoded || 0) : 0;
+          const bytesReceived = inbound ? Number(inbound.bytesReceived || 0) : 0;
+          const previous = entry.statsSample;
+          const elapsedMs = previous ? sampledAt - previous.sampledAt : 0;
+          let fps = 0;
+          let bitrateKbps = 0;
+          if (previous && elapsedMs > 0) {
+            fps = Math.max(0, framesDecoded - previous.framesDecoded)
+              * 1000 / elapsedMs;
+            bitrateKbps = Math.max(0, bytesReceived - previous.bytesReceived)
+              * 8 / elapsedMs;
+          }
+
+          // Use a two-second no-progress window as a portable freeze fallback.
+          if (
+            previous
+            && framesDecoded > 0
+            && framesDecoded <= previous.framesDecoded
+            && pc.connectionState === "connected"
+          ) {
+            entry.stalledForMs += Math.max(0, elapsedMs);
+            if (entry.stalledForMs >= 2000 && !entry.freezeActive) {
+              entry.detectedFreezeCount += 1;
+              entry.freezeActive = true;
+            }
+          } else {
+            entry.stalledForMs = 0;
+            entry.freezeActive = false;
+          }
+          entry.statsSample = { sampledAt, framesDecoded, bytesReceived };
+
+          const nativeFreezeCount = inbound
+            && Number.isFinite(Number(inbound.freezeCount))
+            ? Number(inbound.freezeCount) : 0;
+          const droppedFrames = inbound
+            && Number.isFinite(Number(inbound.framesDropped))
+            ? Number(inbound.framesDropped)
+            : Number((quality && quality.droppedVideoFrames) || 0);
+          const roundTripTimeMs = candidatePair
+            && Number.isFinite(Number(candidatePair.currentRoundTripTime))
+            ? Number(candidatePair.currentRoundTripTime) * 1000 : null;
+          const timing = entry.renderTiming || {};
+
           entry.browserStats = inbound ? {
             source: "browser",
             packetsReceived: inbound.packetsReceived || 0,
-            framesDecoded: inbound.framesDecoded || 0,
-            bytesReceived: inbound.bytesReceived || 0,
+            packetsLost: inbound.packetsLost || 0,
+            framesDecoded,
+            framesDropped: droppedFrames,
+            freezeCount: Math.max(nativeFreezeCount, entry.detectedFreezeCount),
+            bytesReceived,
+            fps,
+            bitrateKbps,
             frameWidth: inbound.frameWidth || 0,
             frameHeight: inbound.frameHeight || 0,
-            jitter: inbound.jitter || 0,
+            jitterMs: Number(inbound.jitter || 0) * 1000,
+            roundTripTimeMs,
+            timingAvailable: Boolean(timing.available),
+            timingReason: timing.reason || "",
+            cameraToScreenLatestMs: timing.latestMs ?? null,
+            cameraToScreenMedianMs: timing.medianMs ?? null,
+            cameraToScreenP95Ms: timing.p95Ms ?? null,
+            cameraToScreenSamples: timing.sampleCount || 0,
+            captureToReceiveMs: timing.captureToReceiveMs ?? null,
+            receiveToDisplayMs: timing.receiveToDisplayMs ?? null,
           } : { source: "browser" };
           const decoded = Number(entry.browserStats.framesDecoded || 0);
           entry.live = decoded > 0 || entry.videoFrames > 0;

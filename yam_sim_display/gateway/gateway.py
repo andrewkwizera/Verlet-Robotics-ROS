@@ -35,6 +35,8 @@ class CameraWorker:
         selector: SessionSelector,
         run_dir: str,
         poll_timeout_s: float,
+        jitter_buffer_ms: int,
+        queue_max_packets: int,
         stop_event: threading.Event,
     ) -> None:
         self.camera = camera
@@ -42,6 +44,8 @@ class CameraWorker:
         self.selector = selector
         self.run_dir = run_dir
         self.poll_timeout_s = poll_timeout_s
+        self.jitter_buffer_ms = jitter_buffer_ms
+        self.queue_max_packets = queue_max_packets
         self.stop_event = stop_event
 
         self.session_id: Optional[str] = None
@@ -108,6 +112,8 @@ class CameraWorker:
                 self.camera.host,
                 self.camera.port,
                 self.run_dir,
+                self.jitter_buffer_ms,
+                self.queue_max_packets,
             )
             answer = candidate.handle_offer(sdp)
             self.client.post_answer(
@@ -227,6 +233,8 @@ class Gateway:
                 self.selector,
                 config.run_dir,
                 config.poll_timeout_s,
+                config.jitter_buffer_ms,
+                config.queue_max_packets,
                 self.stop_event,
             )
             for camera in config.cameras

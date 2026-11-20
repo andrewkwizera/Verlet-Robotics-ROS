@@ -533,6 +533,14 @@ main {
   overflow: hidden;
 }
 
+.webrtc-latency-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 10px;
+  text-align: center;
+}
+
 .webrtc-retry {
   align-self: flex-start;
   font: inherit;

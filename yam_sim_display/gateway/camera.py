@@ -1,4 +1,4 @@
-"""One passthrough webrtcbin pipeline per synthetic RTP camera.
+"""One passthrough webrtcbin pipeline per encoded RTP camera.
 
 Media path (no decoder, encoder or converter)::
 
@@ -97,7 +97,13 @@ class CameraPipeline:
     _sequence = 0
 
     def __init__(
-        self, camera_id: str, host: str, port: int, run_dir: str
+        self,
+        camera_id: str,
+        host: str,
+        port: int,
+        run_dir: str,
+        jitter_buffer_ms: int = 30,
+        queue_max_packets: int = 32,
     ) -> None:
         CameraPipeline._sequence += 1
         self.sequence = CameraPipeline._sequence
@@ -105,6 +111,8 @@ class CameraPipeline:
         self.host = host
         self.port = port
         self.run_dir = run_dir
+        self.jitter_buffer_ms = jitter_buffer_ms
+        self.queue_max_packets = queue_max_packets
 
         self.started = False
         self.answer_posted = False
@@ -133,7 +141,7 @@ class CameraPipeline:
         self.udpsrc.set_property("caps", Gst.Caps.from_string(RTP_CAPS))
 
         self.jitter = self._make("rtpjitterbuffer", f"jitter_{suffix}")
-        self.jitter.set_property("latency", 50)
+        self.jitter.set_property("latency", jitter_buffer_ms)
         self.jitter.set_property("drop-on-latency", True)
 
         self.depay = self._make("rtph264depay", f"depay_{suffix}")
@@ -147,9 +155,11 @@ class CameraPipeline:
         self.pay.set_property("mtu", 1200)
 
         self.queue = self._make("queue", f"queue_{suffix}")
-        self.queue.set_property("max-size-buffers", 300)
-        self.queue.set_property("max-size-bytes", 3_000_000)
+        self.queue.set_property("max-size-buffers", queue_max_packets)
+        self.queue.set_property("max-size-bytes", 0)
         self.queue.set_property("max-size-time", 0)
+        # Drop old RTP packets instead of allowing video delay to grow.
+        self.queue.set_property("leaky", 2)
 
         self.webrtc = self._make("webrtcbin", f"webrtc_{suffix}")
         self.webrtc.set_property("bundle-policy", "max-bundle")
@@ -334,6 +344,8 @@ class CameraPipeline:
             "ice_candidates": len(self.ice_candidates),
             "error": self.error,
             "answer_posted": self.answer_posted,
+            "jitter_buffer_ms": self.jitter_buffer_ms,
+            "queue_max_packets": self.queue_max_packets,
         }
 
     def stats(self) -> dict:

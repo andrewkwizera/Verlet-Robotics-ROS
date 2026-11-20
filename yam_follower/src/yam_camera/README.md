@@ -1,8 +1,14 @@
 # YAM camera streaming
 
 This package keeps the camera video path separate from ROS 2 arm control.
-The follower NUC captures and encodes both cameras. The leader NUC receives,
-decodes and displays both streams.
+The follower NUC captures and encodes both cameras. Each encoded RTP stream is
+split into two independent outputs:
+
+- UDP ports `5000`/`5002` feed the existing native leader receiver.
+- Local UDP ports `5100`/`5102` feed the follower-side WebRTC gateway.
+
+The camera is opened and encoded only once. Small leaky queues prevent either
+output from building a growing video delay.
 
 ## Required GStreamer elements
 
@@ -35,6 +41,14 @@ ros2 launch yam_camera follower_camera_sender.launch.py
 Disable one camera when troubleshooting with `enable_d405:=false` or
 `enable_d455f:=false`.
 
+For example, run only the D455f:
+
+```bash
+ros2 launch yam_camera follower_camera_sender.launch.py \
+  enable_d405:=false \
+  enable_d455f:=true
+```
+
 ## Run cameras with the robot launch
 
 Camera startup is disabled by default. Enable it explicitly:
@@ -58,3 +72,6 @@ Put the real camera paths and leader IP address only in
 `config/cameras.local.yaml`. Git ignores that file. The launch files first load
 the public example and then apply values from the local file. A launch argument
 such as `leader_ip:=<LEADER_NUC_IP>` can still override the local value.
+
+The complete physical WebRTC workflow is documented in
+`yam_sim_display/docs/CAMERA_DASHBOARD_RUNBOOK.md` at the repository root.

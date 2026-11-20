@@ -44,8 +44,8 @@ def load_settings():
     return settings
 
 
-def sender_process(name, enabled, device, port):
-    """Build one low-latency GStreamer sender process."""
+def sender_process(name, enabled, device, leader_port, gateway_port):
+    """Send one encoded RTP stream to the leader and local WebRTC gateway."""
     caps = [
         'video/x-raw,format=YUY2,width=', LaunchConfiguration('width'),
         ',height=', LaunchConfiguration('height'),
@@ -78,9 +78,24 @@ def sender_process(name, enabled, device, port):
             ['pt=', LaunchConfiguration('rtp_payload_type')],
             'config-interval=-1',
             ['mtu=', LaunchConfiguration('mtu')],
+            '!', 'tee', 'name=rtp_tee',
+
+            # Keep the existing native stream independent from WebRTC.
+            'rtp_tee.', '!', 'queue',
+            'max-size-buffers=16', 'max-size-bytes=0', 'max-size-time=0',
+            'leaky=downstream',
             '!', 'udpsink',
             ['host=', LaunchConfiguration('leader_ip')],
-            ['port=', LaunchConfiguration(port)],
+            ['port=', LaunchConfiguration(leader_port)],
+            'sync=false', 'async=false',
+
+            # The follower-side gateway receives this local RTP copy.
+            'rtp_tee.', '!', 'queue',
+            'max-size-buffers=16', 'max-size-bytes=0', 'max-size-time=0',
+            'leaky=downstream',
+            '!', 'udpsink',
+            ['host=', LaunchConfiguration('gateway_host')],
+            ['port=', LaunchConfiguration(gateway_port)],
             'sync=false', 'async=false',
         ],
     )
@@ -101,7 +116,15 @@ def generate_launch_description():
         DeclareLaunchArgument('d455f_device', default_value=cameras['d455f']['device']),
         DeclareLaunchArgument('d405_port', default_value=str(cameras['d405']['port'])),
         DeclareLaunchArgument('d455f_port', default_value=str(cameras['d455f']['port'])),
+        DeclareLaunchArgument(
+            'd405_gateway_port',
+            default_value=str(cameras['d405']['gateway_port'])),
+        DeclareLaunchArgument(
+            'd455f_gateway_port',
+            default_value=str(cameras['d455f']['gateway_port'])),
         DeclareLaunchArgument('leader_ip', default_value=network['leader_ip']),
+        DeclareLaunchArgument(
+            'gateway_host', default_value=network['gateway_host']),
         DeclareLaunchArgument('width', default_value='848'),
         DeclareLaunchArgument('height', default_value='480'),
         DeclareLaunchArgument('fps', default_value='60'),
@@ -114,7 +137,11 @@ def generate_launch_description():
     ]
 
     processes = [
-        sender_process('d405_camera_sender', 'enable_d405', 'd405_device', 'd405_port'),
-        sender_process('d455f_camera_sender', 'enable_d455f', 'd455f_device', 'd455f_port'),
+        sender_process(
+            'd405_camera_sender', 'enable_d405', 'd405_device',
+            'd405_port', 'd405_gateway_port'),
+        sender_process(
+            'd455f_camera_sender', 'enable_d455f', 'd455f_device',
+            'd455f_port', 'd455f_gateway_port'),
     ]
     return LaunchDescription(arguments + processes)

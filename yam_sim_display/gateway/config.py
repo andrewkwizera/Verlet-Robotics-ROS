@@ -18,12 +18,14 @@ CAMERA_IDS = ("d405", "d455f")
 DEFAULT_CONFIG: dict[str, Any] = {
     "signaling_url": "http://127.0.0.1:8080",
     "cameras": {
-        "d405": {"host": "127.0.0.1", "port": 5000},
-        "d455f": {"host": "127.0.0.1", "port": 5002},
+        "d405": {"host": "127.0.0.1", "port": 5100},
+        "d455f": {"host": "127.0.0.1", "port": 5102},
     },
     "poll_timeout_s": 10.0,
     "keepalive_interval_s": 60.0,
     "stats_interval_s": 1.0,
+    "jitter_buffer_ms": 30,
+    "queue_max_packets": 32,
     "run_dir": "",
 }
 
@@ -42,6 +44,8 @@ class GatewayConfig:
     poll_timeout_s: float
     keepalive_interval_s: float
     stats_interval_s: float
+    jitter_buffer_ms: int
+    queue_max_packets: int
     run_dir: str
 
     @classmethod
@@ -80,6 +84,13 @@ class GatewayConfig:
         if keepalive <= 0.0 or stats_interval <= 0.0:
             raise ValueError("intervals must be positive")
 
+        jitter_buffer_ms = int(data.get("jitter_buffer_ms", 30))
+        queue_max_packets = int(data.get("queue_max_packets", 32))
+        if not 0 <= jitter_buffer_ms <= 500:
+            raise ValueError("jitter_buffer_ms must be between 0 and 500")
+        if not 1 <= queue_max_packets <= 1000:
+            raise ValueError("queue_max_packets must be between 1 and 1000")
+
         run_dir = str(data.get("run_dir") or "").strip()
         if not run_dir:
             run_dir = os.path.join(
@@ -92,6 +103,8 @@ class GatewayConfig:
             poll_timeout_s=poll_timeout,
             keepalive_interval_s=keepalive,
             stats_interval_s=stats_interval,
+            jitter_buffer_ms=jitter_buffer_ms,
+            queue_max_packets=queue_max_packets,
             run_dir=run_dir,
         )
 
@@ -131,10 +144,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--camera", action="append", type=parse_camera_spec,
         help="ID:HOST:PORT override (repeatable)",
     )
+    parser.add_argument(
+        "--only-camera", action="append", choices=CAMERA_IDS,
+        help="run only this camera (repeatable)",
+    )
     parser.add_argument("--run-dir", help="directory for stats and SDP dumps")
     parser.add_argument("--poll-timeout", type=float, help="offer poll timeout (s)")
     parser.add_argument("--keepalive-interval", type=float)
     parser.add_argument("--stats-interval", type=float)
+    parser.add_argument("--jitter-buffer-ms", type=int)
+    parser.add_argument("--queue-max-packets", type=int)
     return parser
 
 
@@ -158,6 +177,14 @@ def from_args(argv: Optional[list[str]] = None) -> GatewayConfig:
         for camera_id, host, port in args.camera:
             cameras[camera_id] = {"host": host, "port": port}
         data["cameras"] = cameras
+    if args.only_camera:
+        selected = set(args.only_camera)
+        cameras = dict(data.get("cameras") or {})
+        data["cameras"] = {
+            camera_id: spec
+            for camera_id, spec in cameras.items()
+            if camera_id in selected
+        }
     if args.run_dir:
         data["run_dir"] = args.run_dir
     if args.poll_timeout is not None:
@@ -166,5 +193,9 @@ def from_args(argv: Optional[list[str]] = None) -> GatewayConfig:
         data["keepalive_interval_s"] = args.keepalive_interval
     if args.stats_interval is not None:
         data["stats_interval_s"] = args.stats_interval
+    if args.jitter_buffer_ms is not None:
+        data["jitter_buffer_ms"] = args.jitter_buffer_ms
+    if args.queue_max_packets is not None:
+        data["queue_max_packets"] = args.queue_max_packets
 
     return GatewayConfig.from_mapping(data)
