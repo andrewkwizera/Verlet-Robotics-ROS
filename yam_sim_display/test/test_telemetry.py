@@ -63,8 +63,17 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.bind_address, "127.0.0.1")
         self.assertEqual(config.network_rtt_host, "")
         self.assertFalse(config.webrtc_enabled)
+        self.assertEqual(config.webrtc_cameras, ("d405", "d455f"))
         self.assertLess(config.warning_s, config.stale_s)
         self.assertLess(config.stale_s, config.disconnect_s)
+
+    def test_webrtc_camera_allowlist(self):
+        config = make_config(**{"webrtc.cameras": "d455f"})
+        self.assertEqual(config.webrtc_cameras, ("d455f",))
+        with self.assertRaises(ValueError):
+            make_config(**{"webrtc.cameras": ""})
+        with self.assertRaises(ValueError):
+            make_config(**{"webrtc.cameras": "unknown"})
 
     def test_threshold_order_enforced(self):
         with self.assertRaises(ValueError):

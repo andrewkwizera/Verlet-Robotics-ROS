@@ -214,6 +214,13 @@ class SignalingHttpTests(unittest.TestCase):
         self.assertEqual(sessions[0]["offer_rev"]["d405"], 0)
         self.assertEqual(sessions[1]["offer_rev"]["d405"], 1)
 
+    def test_session_discovery_advertises_enabled_cameras(self):
+        status, body = self.request("GET", "/api/webrtc/sessions")
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            json.loads(body)["cameras"], ["d405", "d455f"]
+        )
+
     def test_offer_answer_exchange_over_http(self):
         session_id = self.new_session()
         base = f"session_id={session_id}&camera_id=d405"

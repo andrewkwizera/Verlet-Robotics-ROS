@@ -83,6 +83,12 @@ class DashboardWebRTCIntegrationTests(unittest.TestCase):
         self.assertIn("onChange: renderWebRTC", self.app)
         self.assertIn("Camera setup is isolated", self.client)
 
+    def test_disabled_camera_does_not_create_an_offer(self):
+        self.assertIn("Array.isArray(discovery.cameras)", self.client)
+        self.assertIn("state.cameras[id].enabled = advertised.has(id)", self.client)
+        self.assertIn("enabledCameras.map", self.client)
+        self.assertIn("Disabled by dashboard camera configuration", self.app)
+
     def test_browser_and_gateway_metrics_render_separately(self):
         self.assertIn("`video ", self.app)
         self.assertIn("`transport ", self.app)
